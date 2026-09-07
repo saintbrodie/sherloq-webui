@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements-noiseprint.txt
 COPY web ./web
 COPY gui/noiseprint ./noiseprint
 
+RUN useradd --create-home --uid 10002 --shell /usr/sbin/nologin sherloq-noiseprint
+USER sherloq-noiseprint
+
 EXPOSE 8101
 
 CMD ["uvicorn", "web.noiseprint_worker:app", "--host", "0.0.0.0", "--port", "8101"]
