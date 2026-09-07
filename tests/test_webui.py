@@ -166,6 +166,26 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert len(frequency_payload["items"]) == 4
     assert frequency_payload["data"]["Effective smoothing kernel"] <= 511
 
+    separation = client.get(
+        f"/api/sessions/{session_id}/advanced/signal-separation"
+        "?mode=median&radius=1&sigma=3&levels=32&grayscale=false&denoised=false"
+    )
+    assert separation.status_code == 200, separation.text
+    separation_payload = separation.json()
+    assert separation_payload["type"] == "image"
+    assert separation_payload["data"]["Mode"] == "median"
+    assert "Residual" in separation_payload["data"]["Output"]
+
+    separation_gray = client.get(
+        f"/api/sessions/{session_id}/advanced/signal-separation"
+        "?mode=gaussian&radius=1&sigma=3&levels=0&grayscale=true&denoised=true"
+    )
+    assert separation_gray.status_code == 200, separation_gray.text
+    gray_payload = separation_gray.json()
+    assert gray_payload["data"]["Mode"] == "gaussian"
+    assert gray_payload["data"]["Grayscale"] is True
+    assert gray_payload["data"]["Output"] == "Denoised image"
+
     thumbnail = client.get(f"/api/sessions/{session_id}/tools/thumbnail")
     assert thumbnail.status_code == 200
     assert thumbnail.json()["data"]["Embedded thumbnail"] is False
