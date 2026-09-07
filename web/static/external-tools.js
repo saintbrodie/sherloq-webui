@@ -1,26 +1,13 @@
-const externalTools = [
-  { key: "hex-editor", label: "Hex Editor", icon: "0x" },
-  { key: "reverse-search", label: "Similarity Search", icon: "↗" },
-];
-
-const generalExternalGroup = groups.find((group) => group.label === "General");
-if (generalExternalGroup) {
-  for (const externalTool of externalTools) {
-    if (!generalExternalGroup.tools.some((item) => item.key === externalTool.key)) {
-      generalExternalGroup.tools.push(externalTool);
-    }
-  }
-}
-
-const externalToolKeys = new Set(externalTools.map((item) => item.key));
-
-const previousExternalUpload = upload;
-upload = async function uploadWithExternalUtilities(file) {
-  await previousExternalUpload(file);
-  if (!state.session) return;
-  for (const key of externalToolKeys) state.available.add(key);
-  renderNav(el.search.value);
-};
+const hexEditorTool = SherloqPlugins.registerTool("General", {
+  key: "hex-editor",
+  label: "Hex Editor",
+  icon: "0x",
+});
+const reverseSearchTool = SherloqPlugins.registerTool("General", {
+  key: "reverse-search",
+  label: "Similarity Search",
+  icon: "↗",
+});
 
 function externalButton(label, href, primary = false) {
   return `<a class="btn${primary ? " primary" : " ghost"}" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
@@ -57,15 +44,13 @@ function renderExternalTool(key) {
     </div>`;
 }
 
-const previousExternalRun = run;
-run = async function runExternalTool(key, params = null) {
-  if (!externalToolKeys.has(key)) return previousExternalRun(key, params);
-  if (!state.session || !state.available.has(key)) return;
-  if (typeof setMagnifierActive === "function") setMagnifierActive(false);
-  state.active = key;
-  renderNav(el.search.value);
-  el.controls.innerHTML = "";
-  renderExternalTool(key);
-};
-
-renderNav(el.search.value);
+for (const key of [hexEditorTool.key, reverseSearchTool.key]) {
+  SherloqPlugins.registerRunner(key, (toolKey) => {
+    if (!state.session || !state.available.has(toolKey)) return;
+    if (typeof setMagnifierActive === "function") setMagnifierActive(false);
+    state.active = toolKey;
+    renderNav(el.search.value);
+    el.controls.innerHTML = "";
+    renderExternalTool(toolKey);
+  });
+}
