@@ -10,7 +10,7 @@ from typing import Any
 
 import cv2 as cv
 import numpy as np
-from PIL import ExifTags, Image, ImageChops
+from PIL import ExifTags, Image, ImageChops, UnidentifiedImageError
 
 MAX_IMAGE_PIXELS = 80_000_000
 
@@ -29,11 +29,39 @@ def filename_ballistics(filename: str) -> str:
     return "Unknown source or manually renamed"
 
 
+def _rawpy_module():
+    try:
+        import rawpy
+    except ModuleNotFoundError as exc:
+        raise ValueError(
+            "The uploaded file is not a readable raster image and RAW decoding is unavailable."
+        ) from exc
+    return rawpy
+
+
+def _decode_raw(path: Path) -> np.ndarray:
+    rawpy = _rawpy_module()
+    try:
+        with rawpy.imread(str(path)) as raw:
+            rgb = raw.postprocess(no_auto_bright=True, use_camera_wb=True)
+    except Exception as exc:
+        raise ValueError("The uploaded file is not a readable raster or RAW image.") from exc
+    if rgb is None or getattr(rgb, "ndim", 0) != 3 or rgb.shape[2] < 3:
+        raise ValueError("RAW decoder did not produce a three-channel image.")
+    if rgb.dtype != np.uint8:
+        if np.issubdtype(rgb.dtype, np.integer):
+            maximum = float(np.iinfo(rgb.dtype).max)
+            rgb = np.clip(rgb.astype(np.float32) * (255.0 / maximum), 0, 255).astype(np.uint8)
+        else:
+            rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+    return cv.cvtColor(rgb[:, :, :3], cv.COLOR_RGB2BGR)
+
+
 def load_image(path: Path) -> np.ndarray:
     data = np.fromfile(path, dtype=np.uint8)
     image = cv.imdecode(data, cv.IMREAD_COLOR)
     if image is None:
-        raise ValueError("The uploaded file is not a readable raster image.")
+        image = _decode_raw(path)
     height, width = image.shape[:2]
     if height * width > MAX_IMAGE_PIXELS:
         raise ValueError("Image dimensions are too large for interactive analysis.")
@@ -124,28 +152,59 @@ def _jsonable(value: Any) -> Any:
         return str(value)
 
 
+def _raw_metadata(path: Path) -> dict[str, Any]:
+    rawpy = _rawpy_module()
+    try:
+        with rawpy.imread(str(path)) as raw:
+            sizes = raw.sizes
+            result: dict[str, Any] = {
+                "Format": "RAW",
+                "Raw width": int(getattr(sizes, "raw_width", 0)),
+                "Raw height": int(getattr(sizes, "raw_height", 0)),
+                "Visible width": int(getattr(sizes, "width", 0)),
+                "Visible height": int(getattr(sizes, "height", 0)),
+            }
+            color_desc = getattr(raw, "color_desc", None)
+            if isinstance(color_desc, bytes):
+                result["Color description"] = color_desc.decode("ascii", errors="replace").rstrip("\x00")
+            elif color_desc:
+                result["Color description"] = str(color_desc)
+            pattern = getattr(raw, "raw_pattern", None)
+            if pattern is not None:
+                result["Raw pattern"] = np.asarray(pattern).tolist()
+            white = getattr(raw, "camera_whitebalance", None)
+            if white is not None:
+                result["Camera white balance"] = [round(float(value), 6) for value in white]
+            return result
+    except Exception as exc:
+        raise ValueError("Unable to read RAW metadata.") from exc
+
+
 def exif_metadata(path: Path) -> dict[str, Any]:
-    with Image.open(path) as pil:
-        result: dict[str, Any] = {
-            "Format": pil.format,
-            "Mode": pil.mode,
-            "Width": pil.width,
-            "Height": pil.height,
-        }
-        if "dpi" in pil.info:
-            result["DPI"] = _jsonable(pil.info["dpi"])
-        if "icc_profile" in pil.info:
-            result["ICC profile"] = f"present ({len(pil.info['icc_profile'])} bytes)"
-        for tag_id, value in pil.getexif().items():
-            tag = ExifTags.TAGS.get(tag_id, str(tag_id))
-            if tag == "GPSInfo" and isinstance(value, dict):
-                result[tag] = {
-                    ExifTags.GPSTAGS.get(k, str(k)): _jsonable(v)
-                    for k, v in value.items()
-                }
-            else:
-                result[tag] = _jsonable(value)
-        return result
+    try:
+        with Image.open(path) as pil:
+            result: dict[str, Any] = {
+                "Format": pil.format,
+                "Mode": pil.mode,
+                "Width": pil.width,
+                "Height": pil.height,
+            }
+            if "dpi" in pil.info:
+                result["DPI"] = _jsonable(pil.info["dpi"])
+            if "icc_profile" in pil.info:
+                result["ICC profile"] = f"present ({len(pil.info['icc_profile'])} bytes)"
+            for tag_id, value in pil.getexif().items():
+                tag = ExifTags.TAGS.get(tag_id, str(tag_id))
+                if tag == "GPSInfo" and isinstance(value, dict):
+                    result[tag] = {
+                        ExifTags.GPSTAGS.get(k, str(k)): _jsonable(v)
+                        for k, v in value.items()
+                    }
+                else:
+                    result[tag] = _jsonable(value)
+            return result
+    except (UnidentifiedImageError, OSError):
+        return _raw_metadata(path)
 
 
 def histogram(image: np.ndarray) -> dict[str, list[int]]:
@@ -281,7 +340,15 @@ def _ijg_table_for_quality(quality: int) -> np.ndarray:
 
 
 def jpeg_quality(path: Path) -> dict[str, Any]:
-    with Image.open(path) as pil:
+    try:
+        pil = Image.open(path)
+    except (UnidentifiedImageError, OSError):
+        return {
+            "JPEG": False,
+            "Estimated quality": None,
+            "Quantization tables": 0,
+        }
+    with pil:
         if pil.format != "JPEG" or not getattr(pil, "quantization", None):
             return {
                 "JPEG": False,
