@@ -8,7 +8,6 @@ from . import jpeg_tools as jpeg_tools
 from . import resampling as resampling
 
 for _name in (
-    "geolocation",
     "pixel_statistics",
     "pca_projection",
     "wavelet_threshold",
@@ -17,5 +16,22 @@ for _name in (
 ):
     setattr(analysis, _name, getattr(advanced, _name))
 
+
+def _safe_geolocation(path):
+    try:
+        return advanced.geolocation(path)
+    except Exception:
+        # RAW files and some uncommon raster containers are not readable by
+        # Pillow's EXIF parser. Decoding the evidence should still succeed and
+        # GPS inspection should degrade to an explicit no-data result.
+        return {
+            "GPS data": False,
+            "Latitude": None,
+            "Longitude": None,
+            "Status": "No Pillow-readable EXIF GPS block",
+        }
+
+
+analysis.geolocation = _safe_geolocation
 analysis.embedded_thumbnail = jpeg_tools.embedded_thumbnail
 analysis.resampling_analysis = resampling.resampling_analysis
