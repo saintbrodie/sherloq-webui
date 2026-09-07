@@ -12,6 +12,7 @@ from web.app import app
 TOOLS = [
     "digest",
     "metadata",
+    "thumbnail",
     "geolocation",
     "histogram",
     "channels",
@@ -74,6 +75,10 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     for tool in TOOLS:
         result = client.get(f"/api/sessions/{session_id}/tools/{tool}")
         assert result.status_code == 200, f"{tool}: {result.text}"
+
+    thumbnail = client.get(f"/api/sessions/{session_id}/tools/thumbnail")
+    assert thumbnail.status_code == 200
+    assert thumbnail.json()["data"]["Embedded thumbnail"] is False
 
     no_reference = client.get(f"/api/sessions/{session_id}/tools/comparison")
     assert no_reference.status_code == 409
