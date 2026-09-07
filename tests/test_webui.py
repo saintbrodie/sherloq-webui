@@ -148,6 +148,19 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert header_payload["data"]["overview"]["Detected signature"] == "JPEG"
     assert header_payload["data"]["overview"]["Header bytes shown"] == 128
 
+    adjustments = client.get(
+        f"/api/sessions/{session_id}/advanced/adjustments"
+        "?brightness=12&saturation=-8&hue=15&gamma_tenths=12"
+        "&shadows=-10&highlights=10&sweep=127&width=200&sharpen=20"
+        "&threshold=255&equalize=clahe-2&invert=false"
+    )
+    assert adjustments.status_code == 200, adjustments.text
+    adjustment_payload = adjustments.json()
+    assert adjustment_payload["type"] == "image"
+    assert adjustment_payload["data"]["Gamma"] == 1.2
+    assert adjustment_payload["data"]["Equalization"] == "clahe-2"
+    assert adjustment_payload["data"]["Evidence modified"] is False
+
     minmax = client.get(
         f"/api/sessions/{session_id}/advanced/minmax"
         "?channel=luminance&minimum_color=green&maximum_color=red&filter_strength=0"
