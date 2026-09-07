@@ -14,6 +14,8 @@ from .analysis import jpeg_quality
 
 app = FastAPI(title="Sherloq Noiseprint Worker", version="0.1.0")
 MAX_UPLOAD_BYTES = int(os.environ.get("SHERLOQ_MAX_UPLOAD_MB", "40")) * 1024 * 1024
+MIN_JPEG_MODEL = 51
+MAX_JPEG_MODEL = 100
 
 
 @app.get("/health")
@@ -26,14 +28,17 @@ def _decode_gray(path: Path) -> np.ndarray:
     image = cv.imdecode(data, cv.IMREAD_GRAYSCALE)
     if image is None:
         raise ValueError("Noiseprint worker could not decode the uploaded image.")
-    return image.astype(np.float32) / 255.0
+    # Match the legacy GRIP-UNINA reader, which maps uint8 data into [0, 1)
+    # using a divisor of 256 rather than 255.
+    return image.astype(np.float32) / 256.0
 
 
-def _quality_model(path: Path) -> int:
+def _quality_model(path: Path) -> tuple[int, int | None]:
     info = jpeg_quality(path)
     if info.get("JPEG") and info.get("Estimated quality") is not None:
-        return int(info["Estimated quality"])
-    return 101
+        estimated = int(info["Estimated quality"])
+        return int(np.clip(estimated, MIN_JPEG_MODEL, MAX_JPEG_MODEL)), estimated
+    return 101, None
 
 
 @app.post("/analyze")
@@ -54,7 +59,7 @@ async def analyze(file: UploadFile = File(...)) -> JSONResponse:
                 target.write(chunk)
 
         gray = _decode_gray(temp_path)
-        quality = _quality_model(temp_path)
+        quality, estimated_quality = _quality_model(temp_path)
 
         # Import the legacy GRIP-UNINA implementation only when inference is
         # requested. This keeps worker startup/health checks cheap and prevents
@@ -73,6 +78,17 @@ async def analyze(file: UploadFile = File(...)) -> JSONResponse:
         if not ok:
             raise ValueError("Unable to encode Noiseprint heatmap.")
 
+        data = {
+            "Noiseprint model": "uncompressed/other" if quality == 101 else f"JPEG {quality}",
+            "Valid blocks": int(np.count_nonzero(valid)),
+            "Image width": int(gray.shape[1]),
+            "Image height": int(gray.shape[0]),
+        }
+        if estimated_quality is not None:
+            data["Estimated JPEG quality"] = estimated_quality
+            if estimated_quality != quality:
+                data["Nearest shipped model"] = quality
+
         return JSONResponse(
             {
                 "title": "Noiseprint Composite Splicing",
@@ -81,12 +97,7 @@ async def analyze(file: UploadFile = File(...)) -> JSONResponse:
                     "quality-specific network and EM post-processing. This component carries "
                     "the upstream Noiseprint nonprofit-use license and remains optional."
                 ),
-                "data": {
-                    "JPEG quality model": quality,
-                    "Valid blocks": int(np.count_nonzero(valid)),
-                    "Image width": int(gray.shape[1]),
-                    "Image height": int(gray.shape[0]),
-                },
+                "data": data,
                 "image_base64": base64.b64encode(encoded.tobytes()).decode("ascii"),
             }
         )
