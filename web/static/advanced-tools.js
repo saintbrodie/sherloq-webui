@@ -19,7 +19,10 @@ const advancedTools = [
   },
 ];
 
-const advancedToolKeys = new Set(advancedTools.map((entry) => entry.tool.key));
+const localAdvancedToolKeys = new Set(advancedTools.map((entry) => entry.tool.key));
+const advancedToolKeys = new Set(localAdvancedToolKeys);
+const configuredModelKeys = new Set();
+
 for (const entry of advancedTools) {
   const group = groups.find((item) => item.label === entry.group);
   if (group && !group.tools.some((item) => item.key === entry.tool.key)) {
@@ -27,11 +30,35 @@ for (const entry of advancedTools) {
   }
 }
 
+async function discoverModelServices() {
+  try {
+    const response = await fetch("/api/model-services", { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Unable to read model-service status");
+    const services = payload.services || {};
+    for (const key of ["splicing", "trufor"]) {
+      if (services[key]?.configured) {
+        configuredModelKeys.add(key);
+        advancedToolKeys.add(key);
+        if (state.session) state.available.add(key);
+      } else {
+        configuredModelKeys.delete(key);
+        advancedToolKeys.delete(key);
+        if (state.session) state.available.delete(key);
+      }
+    }
+    renderNav(el.search.value);
+  } catch (exception) {
+    console.warn("Sherloq model-service discovery failed:", exception);
+  }
+}
+
 const coreUpload = upload;
 upload = async function uploadWithAdvancedTools(file) {
   await coreUpload(file);
   if (!state.session) return;
-  for (const key of advancedToolKeys) state.available.add(key);
+  for (const key of localAdvancedToolKeys) state.available.add(key);
+  for (const key of configuredModelKeys) state.available.add(key);
   renderNav(el.search.value);
 };
 
@@ -87,4 +114,5 @@ run = async function runWithAdvancedTools(key, params = null) {
   }
 };
 
+discoverModelServices();
 renderNav(el.search.value);
