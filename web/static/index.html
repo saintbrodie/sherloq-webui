@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080c10">
+  <title>Sherloq WebUI</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="mark">S</span>
+      <span><strong>SHERLOQ</strong><small>Digital Image Forensics</small></span>
+    </a>
+    <div class="actions">
+      <span id="sessionStatus" class="status"><i></i>No image loaded</span>
+      <button id="exportButton" class="btn ghost" disabled>Export report</button>
+      <label class="btn primary" for="fileInput">Open image</label>
+      <input id="fileInput" type="file" accept="image/*,.tif,.tiff,.bmp,.webp" hidden>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="side-title"><span>TOOLS</span><kbd>⌘/Ctrl K</kbd></div>
+    <div class="search-wrap"><input id="toolSearch" type="search" placeholder="Filter tools…"></div>
+    <nav id="toolNav" class="tool-nav"></nav>
+    <footer><span>WebUI preview</span><span>v0.1</span></footer>
+  </aside>
+
+  <main class="main">
+    <section id="emptyState" class="empty">
+      <div id="dropZone" class="drop" tabindex="0">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 43V15m0 0L21 26m11-11 11 11M13 38v8a5 5 0 0 0 5 5h28a5 5 0 0 0 5-5v-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h1>Inspect an image</h1>
+        <p>Drop a file here or choose an image to begin a forensic workspace.</p>
+        <label class="btn primary big" for="fileInput">Choose image</label>
+        <small>JPEG, PNG, TIFF, BMP, WebP · 40 MB default limit</small>
+      </div>
+      <div class="notes">
+        <article><b>01</b><div><strong>Host-side processing</strong><p>Images are analyzed by the machine running Sherloq WebUI.</p></div></article>
+        <article><b>02</b><div><strong>Clues, not verdicts</strong><p>No single forensic map proves an image was manipulated.</p></div></article>
+        <article><b>03</b><div><strong>Browser workspace</strong><p>Switch tools while keeping the source available for comparison.</p></div></article>
+      </div>
+    </section>
+
+    <section id="workspace" class="workspace hidden">
+      <div class="workspace-head">
+        <div><span class="eyebrow">ACTIVE EVIDENCE</span><h1 id="fileName">—</h1><p id="fileMeta">—</p></div>
+        <div class="zoom"><button id="zoomOut">−</button><button id="zoomReset">100%</button><button id="zoomIn">+</button></div>
+      </div>
+
+      <div class="grid">
+        <section class="panel source-panel">
+          <header class="panel-head"><div><span>REFERENCE</span><strong>Original image</strong></div><em id="sourceDims">—</em></header>
+          <div id="sourceStage" class="image-stage"><img id="sourceImage" alt="Uploaded source" draggable="false"></div>
+        </section>
+
+        <section class="panel analysis-panel">
+          <header class="panel-head"><div><span>ANALYSIS</span><strong id="analysisTitle">Select a tool</strong></div><div id="toolControls" class="controls"></div></header>
+          <div id="analysisBody" class="analysis-body"><div class="placeholder"><b>↖</b><p>Choose an analysis tool from the left rail.</p></div></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+<script src="/app.js" defer></script>
+</body>
+</html>
