@@ -201,7 +201,7 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert export.status_code == 200
     assert "attachment" in export.headers["content-disposition"]
     report = export.json()
-    assert report["sherloq_webui"] == "0.2.0"
+    assert report["sherloq_webui"] == "0.3.0"
     assert "geolocation" in report
     assert "pixel_statistics" in report
 
