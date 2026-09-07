@@ -20,6 +20,15 @@ const advancedTools = [
   {
     group: "Noise",
     tool: {
+      key: "signal-separation",
+      label: "Signal Separation",
+      icon: "N±",
+      controls: "signal-separation",
+    },
+  },
+  {
+    group: "Noise",
+    tool: {
       key: "minmax",
       label: "Min/Max Deviation",
       icon: "±",
@@ -118,6 +127,15 @@ buildControls = function buildAdvancedControls(item) {
     addNum("Smooth %", "smooth", 25, 0, 100, 1, rerun);
     addNum("Threshold %", "threshold", 0, 0, 100, 1, rerun);
     addNum("Display filter", "display_filter", 0, 0, 15, 1, rerun);
+    return;
+  }
+  if (item.controls === "signal-separation") {
+    addSelect("Mode", "mode", ["median", "gaussian", "box", "bilateral", "non-local"], "median", rerun);
+    addNum("Radius", "radius", 1, 1, 10, 1, rerun);
+    addNum("Sigma", "sigma", 3, 1, 200, 1, rerun);
+    addNum("Levels", "levels", 32, 0, 255, 1, rerun);
+    addSelect("Grayscale", "grayscale", ["false", "true"], "false", rerun);
+    addSelect("Output", "denoised", ["false", "true"], "false", rerun);
     return;
   }
   if (item.controls === "minmax") {
