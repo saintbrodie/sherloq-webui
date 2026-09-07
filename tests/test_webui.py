@@ -139,6 +139,15 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
         result = client.get(f"/api/sessions/{session_id}/tools/{tool}")
         assert result.status_code == 200, f"{tool}: {result.text}"
 
+    header = client.get(
+        f"/api/sessions/{session_id}/advanced/header?bytes_to_read=128"
+    )
+    assert header.status_code == 200, header.text
+    header_payload = header.json()
+    assert header_payload["type"] == "groups"
+    assert header_payload["data"]["overview"]["Detected signature"] == "JPEG"
+    assert header_payload["data"]["overview"]["Header bytes shown"] == 128
+
     thumbnail = client.get(f"/api/sessions/{session_id}/tools/thumbnail")
     assert thumbnail.status_code == 200
     assert thumbnail.json()["data"]["Embedded thumbnail"] is False
