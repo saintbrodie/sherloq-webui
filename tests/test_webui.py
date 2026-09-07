@@ -49,6 +49,8 @@ def _sample_image(path: Path, shift: int = 0, size: tuple[int, int] = (240, 180)
 def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     import web.app as web_app
 
+    monkeypatch.delenv("SHERLOQ_NOISEPRINT_URL", raising=False)
+    monkeypatch.delenv("SHERLOQ_TRUFOR_URL", raising=False)
     workdir = tmp_path / "sessions"
     workdir.mkdir()
     monkeypatch.setattr(web_app, "WORK_ROOT", workdir)
@@ -61,6 +63,11 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
 
     assert client.get("/").status_code == 200
     assert client.get("/api/health").json()["status"] == "ok"
+    services = client.get("/api/model-services")
+    assert services.status_code == 200
+    service_data = services.json()["services"]
+    assert service_data["splicing"]["configured"] is False
+    assert service_data["trufor"]["configured"] is False
 
     with sample.open("rb") as handle:
         response = client.post(
@@ -102,6 +109,14 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert ghost_payload["type"] == "gallery"
     assert len(ghost_payload["items"]) == 3
     assert ghost_payload["data"]["Maps"] == 3
+
+    splicing = client.get(f"/api/sessions/{session_id}/advanced/splicing")
+    assert splicing.status_code == 503
+    assert "SHERLOQ_NOISEPRINT_URL" in splicing.json()["detail"]
+
+    trufor = client.get(f"/api/sessions/{session_id}/advanced/trufor")
+    assert trufor.status_code == 503
+    assert "SHERLOQ_TRUFOR_URL" in trufor.json()["detail"]
 
     no_reference = client.get(f"/api/sessions/{session_id}/tools/comparison")
     assert no_reference.status_code == 409
