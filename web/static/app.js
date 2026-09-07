@@ -47,7 +47,7 @@ label: "Tampering",
 tools: [
 { key: "contrast", label: "Contrast Statistics", icon: "↕" },
 { key: "cloning", label: "Copy-Move Forgery", icon: "M", controls: "cloning" },
-{ key: "resampling", label: "Image Resampling", icon: "R" },
+{ key: "resampling", label: "Image Resampling", icon: "R", controls: "resampling" },
 { key: "splicing", label: "Composite Splicing", icon: "S" },
 { key: "trufor", label: "TruFor", icon: "AI" },
 ],
@@ -247,6 +247,11 @@ if (item.controls === "cloning") {
 addSelect("Detector", "detector", ["orb", "brisk", "akaze"], "orb", rerun);
 addNum("Features", "features", 2500, 250, 8000, 250, rerun);
 addNum("Min gap", "min_distance", 0.08, 0.01, 0.5, 0.01, rerun);
+return;
+}
+if (item.controls === "resampling") {
+addSelect("Neighborhood", "resample_kernel", ["3", "5"], "3", rerun);
+addNum("Fourier gamma", "gamma", 4, 0.1, 8, 0.1, rerun);
 return;
 }
 if (item.controls === "comparison") {
