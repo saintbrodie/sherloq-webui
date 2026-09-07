@@ -18,6 +18,15 @@ const advancedTools = [
     },
   },
   {
+    group: "Inspection",
+    tool: {
+      key: "space-conversion",
+      label: "Space Conversion",
+      icon: "◈",
+      controls: "space-conversion",
+    },
+  },
+  {
     group: "Detail",
     tool: {
       key: "frequency-split",
@@ -73,6 +82,18 @@ const advancedTools = [
     },
   },
 ];
+
+const spaceChannels = {
+  rgb: ["red", "green", "blue"],
+  cmyk: ["cyan", "magenta", "yellow", "black"],
+  grayscale: ["lightness", "luminance", "average", "perceptual"],
+  hsv: ["hue", "saturation", "value"],
+  hls: ["hue", "luminance", "saturation"],
+  ycrcb: ["luminance", "chroma-red", "chroma-blue"],
+  xyz: ["x", "y", "z"],
+  lab: ["luminosity", "green-red", "blue-yellow"],
+  luv: ["luminosity", "chroma-u", "chroma-v"],
+};
 
 const localAdvancedToolKeys = new Set(
   advancedTools.filter((entry) => !entry.modelService).map((entry) => entry.tool.key),
@@ -144,6 +165,20 @@ buildControls = function buildAdvancedControls(item) {
     addNum("Threshold", "threshold", 255, 0, 255, 1, rerun);
     addSelect("Equalize", "equalize", ["none", "hist", "clahe-2", "clahe-5", "clahe-10", "clahe-20"], "none", rerun);
     addSelect("Invert", "invert", ["false", "true"], "false", rerun);
+    return;
+  }
+  if (item.controls === "space-conversion") {
+    const updateChannels = () => {
+      const space = el.controls.querySelector('select[name="space"]')?.value || "rgb";
+      const channelSelect = el.controls.querySelector('select[name="channel"]');
+      if (!channelSelect) return;
+      channelSelect.innerHTML = (spaceChannels[space] || []).map(
+        (value) => `<option value="${esc(value)}">${esc(value)}</option>`,
+      ).join("");
+      rerun();
+    };
+    addSelect("Space", "space", Object.keys(spaceChannels), "rgb", updateChannels);
+    addSelect("Channel", "channel", spaceChannels.rgb, "red", rerun);
     return;
   }
   if (item.controls === "frequency-split") {
