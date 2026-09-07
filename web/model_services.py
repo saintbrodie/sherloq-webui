@@ -8,11 +8,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 SERVICE_ENV = {
     "splicing": "SHERLOQ_NOISEPRINT_URL",
+    "median": "SHERLOQ_MEDIAN_URL",
     "trufor": "SHERLOQ_TRUFOR_URL",
 }
 
@@ -62,6 +63,7 @@ def analyze_with_service(
     service: str,
     source: Path,
     original_name: str,
+    params: dict[str, Any] | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
     base_url = _base_url(service)
     body, boundary = _multipart_file(source, original_name)
@@ -69,8 +71,17 @@ def analyze_with_service(
         5.0,
         min(float(os.environ.get("SHERLOQ_MODEL_TIMEOUT_SECONDS", "180")), 1800.0),
     )
+    query = ""
+    if params:
+        clean_params = {
+            str(key): str(value).lower() if isinstance(value, bool) else str(value)
+            for key, value in params.items()
+            if value is not None
+        }
+        if clean_params:
+            query = "?" + urlencode(clean_params)
     request = Request(
-        f"{base_url}/analyze",
+        f"{base_url}/analyze{query}",
         data=body,
         method="POST",
         headers={
