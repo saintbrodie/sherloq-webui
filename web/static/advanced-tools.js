@@ -103,6 +103,19 @@ buildControls = function buildAdvancedControls(item) {
   }
 };
 
+const coreRenderResult = renderResult;
+renderResult = function renderResultWithDetails(result) {
+  coreRenderResult(result);
+  if (
+    result?.data &&
+    (result.type === "image" || result.type === "gallery") &&
+    Object.keys(result.data).length
+  ) {
+    const container = el.body.querySelector(".result");
+    if (container) container.insertAdjacentHTML("beforeend", section("Details", result.data));
+  }
+};
+
 const coreRun = run;
 run = async function runWithAdvancedTools(key, params = null) {
   if (!advancedToolKeys.has(key)) {
