@@ -19,12 +19,22 @@ WebUI v0.3 includes:
 - searchable forensic tool rail
 - backend-driven core tool availability plus modular advanced-tool registration
 - automatic discovery of configured model-backed forensic services
+- same-size secondary reference upload for comparison workflows
 - JSON report export
 - responsive desktop/tablet/mobile layout
+
+### Input formats
+- JPEG, PNG, TIFF, BMP and WebP through OpenCV/Pillow
+- camera RAW fallback through `rawpy` / LibRaw
+- common RAW picker extensions including NEF, RAF, CR2/CR3, DNG, ARW, DCR, MRW, PEF, CRW, SR2, ORF, RW2 and RAW
+- RAW rendering mirrors desktop Sherloq: camera white balance enabled and automatic brightening disabled
+
+RAW detection is content-driven on the server. Uploaded evidence is stored under an internal session filename, so the decoder does not rely on the original extension being preserved.
 
 ### General and metadata
 - file digest with MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
 - EXIF / image metadata inspection
+- basic LibRaw metadata fallback for RAW evidence
 - embedded JPEG EXIF thumbnail extraction, full-size reconstruction, and source/thumbnail difference view
 - EXIF GPS extraction with decimal coordinates and an optional OpenStreetMap link
 
@@ -53,6 +63,7 @@ WebUI v0.3 includes:
 - copy-move candidate detection using ORB, BRISK or AKAZE local features
 - Popescu/Farid interpolation probability analysis with Fourier periodicity visualization for resampling traces
 - optional Noiseprint composite-splicing heatmap through an isolated model worker
+- optional XGBoost median-filter detection through an isolated model worker
 - optional TruFor endpoint through the same external-worker contract
 
 The browser enables model-backed buttons only when their service is configured. Tools that are neither locally ported nor configured remain unavailable rather than silently substituting a different analysis.
@@ -67,11 +78,11 @@ docker compose up --build
 
 Open `http://localhost:8000`.
 
-The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, and removes idle analysis sessions after 12 hours. It does **not** install TensorFlow or start any model-backed worker.
+The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, and removes idle analysis sessions after 12 hours. It includes the lightweight RAW decoder but does **not** install TensorFlow or XGBoost or start any model-backed worker.
 
 ### Enable the bundled Noiseprint worker
 
-Noiseprint is deliberately isolated in a second container because the legacy implementation uses TensorFlow-compatible checkpoints plus SciPy/scikit-learn post-processing. Enable it with the Compose override:
+Noiseprint is deliberately isolated in a second container because the legacy implementation uses TensorFlow-compatible checkpoints plus SciPy/scikit-learn post-processing.
 
 ```bash
 docker compose \
@@ -80,9 +91,24 @@ docker compose \
   up --build
 ```
 
-The main WebUI then discovers `SHERLOQ_NOISEPRINT_URL=http://noiseprint:8101` automatically and enables **Composite Splicing** in the tool rail. The worker is kept internal to the Compose network; port `8101` is not published to the host.
+The main WebUI discovers `SHERLOQ_NOISEPRINT_URL=http://noiseprint:8101` automatically and enables **Composite Splicing**. The worker is internal to the Compose network; port `8101` is not published to the host.
 
 Noiseprint code and model assets included in the legacy Sherloq tree carry the GRIP-UNINA **nonprofit-use** license terms. Review those terms before enabling or redistributing this optional component.
+
+### Enable the bundled median-filter worker
+
+The desktop median-filter detector uses a roughly 28 MB XGBoost model plus a 64×64 block feature pipeline. It is also kept out of the normal WebUI image.
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.median.yml \
+  up --build
+```
+
+This configures `SHERLOQ_MEDIAN_URL=http://median-filter:8103` and enables **Median-Filter Detection** with minimum-variance, probability-threshold, probability-map and speckle-filter controls.
+
+Noiseprint and median detection can be enabled together by supplying all three Compose files.
 
 ### Connect an external TruFor worker
 
@@ -103,7 +129,7 @@ A compatible model worker exposes `POST /analyze`, accepts the evidence as multi
 }
 ```
 
-The same contract is used by the bundled Noiseprint worker, so other heavyweight forensic engines can be integrated without adding their runtimes to the main image.
+Noiseprint and median detection use the same bounded worker transport, allowing heavyweight or GPU-specific forensic engines to stay outside the normal WebUI process.
 
 ## Run directly with Python
 
@@ -127,13 +153,14 @@ Then open `http://localhost:8000`.
 | `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum upload size in megabytes |
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
 | `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible model worker base URL |
+| `SHERLOQ_MEDIAN_URL` | unset | Median-filter worker base URL |
 | `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible model worker base URL |
 | `SHERLOQ_MODEL_TIMEOUT_SECONDS` | `180` | Timeout for model-worker analysis requests |
 | `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum JSON/image response accepted from a model worker |
 
 Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
 
-Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Large images should be cropped to a suspected region before running that tool. JPEG ghost analysis likewise has an interactive-size guard because a quality sweep repeatedly recompresses the full evidence image.
+Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Large inputs should be cropped to a suspected region before running that tool. JPEG ghost analysis likewise has an interactive-size guard because a quality sweep repeatedly recompresses the full evidence image.
 
 ## Architecture
 
@@ -153,10 +180,11 @@ FastAPI  web/main.py
                     │
                     ├──────────── optional HTTP workers
                     │               ├─ bundled Noiseprint worker
+                    │               ├─ bundled median-filter worker
                     │               └─ external TruFor/other workers
                     ▼
 headless analysis
-  ├─ web/analysis.py       core / lightweight tools
+  ├─ web/analysis.py       core tools + OpenCV/LibRaw input decoding
   ├─ web/advanced.py       comparison, PCA, wavelets, copy-move, GPS
   ├─ web/jpeg_tools.py     JPEG EXIF thumbnail parsing and comparison
   ├─ web/resampling.py     interpolation probability + Fourier analysis
@@ -165,12 +193,13 @@ headless analysis
           ├─ OpenCV
           ├─ NumPy
           ├─ Pillow
-          └─ PyWavelets
+          ├─ PyWavelets
+          └─ rawpy / LibRaw
 ```
 
 This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports should put reusable computation in a headless module and expose only structured results through the API. The browser should remain responsible for controls, rendering, and interaction.
 
-`web/main.py` is the deployment entry point. Heavyweight model services communicate over a small HTTP contract, so TensorFlow/PyTorch dependencies and GPU requirements stay outside the normal CPU-friendly WebUI process.
+`web/main.py` is the deployment entry point. Heavyweight model services communicate over a small HTTP contract, so TensorFlow/XGBoost/PyTorch dependencies and GPU requirements stay outside the normal CPU-friendly WebUI process.
 
 ## API
 
@@ -184,6 +213,7 @@ Useful endpoints:
 - `GET /api/sessions/{id}/advanced/wavelet-noise` — run local wavelet-noise blocking analysis
 - `GET /api/sessions/{id}/advanced/jpeg-ghosts` — run the JPEG ghost quality sweep
 - `GET /api/sessions/{id}/advanced/splicing` — proxy to configured Noiseprint service
+- `GET /api/sessions/{id}/advanced/median` — proxy to configured median-filter service
 - `GET /api/sessions/{id}/advanced/trufor` — proxy to configured TruFor service
 - `GET /api/sessions/{id}/assets/{file}` — retrieve generated visual output
 - `GET /api/sessions/{id}/export` — download a JSON report
@@ -194,17 +224,19 @@ FastAPI also provides its normal interactive API documentation at `/docs`.
 
 The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed core single-image tool, including the resampling probability/Fourier path. It also runs wavelet-noise blocking and a reduced JPEG-ghost quality sweep, verifies clean handling of a JPEG without an embedded thumbnail, exercises the complete reference-comparison workflow, and rejects mismatched reference dimensions rather than silently resizing them.
 
-The suite also verifies that model-backed services are disabled cleanly when no worker is configured. GitHub Actions compiles all Python modules and tests, imports the Noiseprint worker without installing TensorFlow to verify lazy isolation, syntax-checks both browser scripts, validates the base and Noiseprint Compose configurations, runs pytest, and builds the lightweight base Docker image.
+RAW decoding has a boundary-level regression test that verifies the desktop-compatible camera-white-balance/no-auto-bright settings, BGR conversion, LibRaw metadata fallback and graceful non-JPEG quality handling without requiring a proprietary camera sample in the repository.
+
+The suite also verifies that model-backed services are disabled cleanly when no worker is configured. GitHub Actions compiles all Python modules and tests, imports optional workers without loading their heavyweight ML runtimes, syntax-checks both browser scripts, validates the base and worker Compose configurations, runs pytest, and builds the lightweight base Docker image.
 
 ## Port status / next targets
 
-The largest remaining parity targets are:
+The largest remaining parity targets are now:
 
-1. median-filter model integration
-2. a packaged/validated TruFor worker once its separately distributed repository and weights are supplied
-3. RAW-image decoding support
-4. additional comparison metrics where they can be implemented without large native binaries
-5. more legacy utilities such as enhanced magnifier and adjustment views where they provide forensic value in a browser
+1. a packaged/validated TruFor worker once its separately distributed repository and weights are supplied
+2. richer file-header / container inspection where it can be done without bundling ExifTool
+3. additional desktop comparison metrics where they can be implemented without large native binaries
+4. interactive adjustment and magnifier utilities that are genuinely useful in a browser workflow
+5. further parity testing against real-world RAW/JPEG evidence sets
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
@@ -218,7 +250,7 @@ pip install -r requirements.txt
 python sherloq.py
 ```
 
-The desktop application currently has broader tool coverage than the WebUI and remains useful as a reference while algorithms are moved into headless modules.
+The desktop application still has some broader utility coverage and remains useful as a reference while algorithms are moved into headless modules.
 
 ## Project philosophy
 
