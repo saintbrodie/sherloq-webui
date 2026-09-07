@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from . import analysis
 from .app import _asset_url, _read_session, _save_asset
 from .inspection_tools import global_adjustments, space_conversion
+from .magnifier import enhancing_magnifier
 
 router = APIRouter(prefix="/api/sessions/{session_id}/advanced", tags=["inspection-tools"])
 
@@ -57,6 +58,48 @@ def adjustments(
             "description": (
                 "Non-destructive inspection rendering using desktop Sherloq's adjustment order. "
                 "The uploaded evidence and original preview are never overwritten."
+            ),
+        }
+    )
+
+
+@router.get("/magnifier")
+def magnifier(
+    session_id: str,
+    x: int = Query(0, ge=0),
+    y: int = Query(0, ge=0),
+    width: int = Query(256, ge=1),
+    height: int = Query(256, ge=1),
+    mode: str = Query("equalize"),
+    centile_percent: int = Query(20, ge=0, le=100),
+    by_channel: bool = Query(False),
+) -> JSONResponse:
+    directory, _ = _read_session(session_id)
+    image = analysis.load_image(directory / "source.bin")
+    try:
+        payload, stats = enhancing_magnifier(
+            image,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            mode=mode,
+            centile_percent=centile_percent,
+            by_channel=by_channel,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    filename = _save_asset(directory, "enhancing-magnifier.png", payload)
+    return JSONResponse(
+        {
+            "type": "image",
+            "title": "Enhancing Magnifier",
+            "image": _asset_url(session_id, filename),
+            "data": stats,
+            "description": (
+                "Only the selected source ROI is enhanced; the rest of the rendering and the "
+                "stored evidence remain unchanged. Drag on the source image to select an ROI."
             ),
         }
     )
