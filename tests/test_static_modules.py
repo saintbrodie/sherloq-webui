@@ -17,6 +17,7 @@ def test_plugin_runtime_load_order_and_assets() -> None:
         "/utility-tools.js",
         "/ela-tools.js",
         "/external-tools.js",
+        "/session-tools.js",
         "/history.js",
     ]
     offsets = [html.index(f'src="{path}"') for path in expected_order]
