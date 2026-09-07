@@ -8,6 +8,7 @@ from .app import _asset_url, _read_session, _save_asset
 from .color_plots import rgb_hsv_plot_data
 from .inspection_tools import global_adjustments, space_conversion
 from .magnifier import enhancing_magnifier
+from .stereogram import decode_stereogram
 
 router = APIRouter(prefix="/api/sessions/{session_id}/advanced", tags=["inspection-tools"])
 
@@ -171,3 +172,30 @@ def rgb_hsv_plots(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return JSONResponse(result)
+
+
+@router.get("/stereogram")
+def stereogram(session_id: str) -> JSONResponse:
+    directory, _ = _read_session(session_id)
+    image = analysis.load_image(directory / "source.bin")
+    try:
+        outputs, stats = decode_stereogram(image)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    items = []
+    for index, (label, payload) in enumerate(outputs):
+        filename = _save_asset(directory, f"stereogram-{index}.png", payload)
+        items.append({"label": label, "image": _asset_url(session_id, filename)})
+    return JSONResponse(
+        {
+            "type": "gallery",
+            "title": "Stereogram Decoder",
+            "items": items,
+            "data": stats,
+            "description": (
+                "Attempts to detect an autostereogram repetition period, then exposes pattern, "
+                "thresholded silhouette, optical-flow depth and shaded views."
+            ),
+        }
+    )
