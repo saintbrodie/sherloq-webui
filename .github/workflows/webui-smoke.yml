@@ -30,6 +30,7 @@ jobs:
         run: |
           node --check web/static/app.js
           node --check web/static/advanced-tools.js
+          node --check web/static/plugin-runtime.js
           node --check web/static/plots.js
           node --check web/static/utility-tools.js
           node --check web/static/ela-tools.js
