@@ -28,6 +28,7 @@ TOOLS = [
     "pca",
     "contrast",
     "cloning",
+    "resampling",
     "jpeg-quality",
 ]
 
@@ -79,6 +80,11 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     thumbnail = client.get(f"/api/sessions/{session_id}/tools/thumbnail")
     assert thumbnail.status_code == 200
     assert thumbnail.json()["data"]["Embedded thumbnail"] is False
+
+    resampling = client.get(f"/api/sessions/{session_id}/tools/resampling")
+    assert resampling.status_code == 200
+    assert resampling.json()["type"] == "gallery"
+    assert resampling.json()["data"]["Neighborhood"] == "3×3"
 
     no_reference = client.get(f"/api/sessions/{session_id}/tools/comparison")
     assert no_reference.status_code == 409
