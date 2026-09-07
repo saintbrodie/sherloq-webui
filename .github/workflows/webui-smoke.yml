@@ -33,6 +33,7 @@ jobs:
           node --check web/static/plots.js
           node --check web/static/utility-tools.js
           node --check web/static/ela-tools.js
+          node --check web/static/external-tools.js
           node --check web/static/history.js
       - name: Run API smoke tests
         run: pytest -q
