@@ -35,7 +35,12 @@ jobs:
           node --check web/static/utility-tools.js
           node --check web/static/ela-tools.js
           node --check web/static/external-tools.js
+          node --check web/static/session-tools.js
           node --check web/static/history.js
+      - name: Verify optional worker Dockerfiles drop root
+        run: |
+          grep -q '^USER sherloq-noiseprint$' Dockerfile.noiseprint
+          grep -q '^USER sherloq-median$' Dockerfile.median
       - name: Run API smoke tests
         run: pytest -q
       - name: Validate Compose configurations
