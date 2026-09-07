@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from . import analysis
 from .app import _asset_url, _read_session, _save_asset
+from .detail_tools import frequency_split, minmax_deviation
 from .file_inspection import inspect_header
 from .forensics_ext import jpeg_ghost_analysis, wavelet_noise_blocking
 from .model_services import analyze_with_service, service_capabilities
@@ -80,6 +81,84 @@ def header_structure(
             "description": (
                 "Bounded binary header view with common image/RAW signature recognition. "
                 "This is intentionally lightweight and does not attempt ExifTool-level container parsing."
+            ),
+        }
+    )
+
+
+@router.get("/frequency-split")
+def frequency_split_route(
+    session_id: str,
+    separation: int = Query(15, ge=0, le=100),
+    smooth: int = Query(25, ge=0, le=100),
+    threshold: int = Query(0, ge=0, le=100),
+    display_filter: int = Query(0, ge=0, le=15),
+) -> JSONResponse:
+    directory, _ = _read_session(session_id)
+    image = analysis.load_image(directory / "source.bin")
+    try:
+        outputs, stats = frequency_split(
+            image,
+            separation=separation,
+            smooth=smooth,
+            threshold=threshold,
+            display_filter=display_filter,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    items = []
+    for index, (label, payload) in enumerate(outputs):
+        filename = _save_asset(directory, f"frequency-split-{index}.png", payload)
+        items.append({"label": label, "image": _asset_url(session_id, filename)})
+    return JSONResponse(
+        {
+            "type": "gallery",
+            "title": "Frequency Split",
+            "items": items,
+            "data": stats,
+            "description": (
+                "Sherloq luminance DFT separation into low/high frequency components plus "
+                "masked magnitude and phase views. Large smoothing kernels are capped for host safety."
+            ),
+        }
+    )
+
+
+@router.get("/minmax")
+def minmax_route(
+    session_id: str,
+    channel: str = Query("luminance"),
+    minimum_color: str = Query("green"),
+    maximum_color: str = Query("red"),
+    filter_strength: int = Query(0, ge=0, le=5),
+) -> JSONResponse:
+    allowed_channels = {"luminance", "red", "green", "blue", "rgb-norm"}
+    allowed_colors = {"red", "green", "blue", "white", "black"}
+    if channel not in allowed_channels:
+        raise HTTPException(status_code=422, detail="Unknown Min/Max channel")
+    if minimum_color not in allowed_colors or maximum_color not in allowed_colors:
+        raise HTTPException(status_code=422, detail="Unknown Min/Max marker color")
+
+    directory, _ = _read_session(session_id)
+    image = analysis.load_image(directory / "source.bin")
+    payload, stats = minmax_deviation(
+        image,
+        channel=channel,
+        minimum_color=minimum_color,
+        maximum_color=maximum_color,
+        filter_strength=filter_strength,
+    )
+    filename = _save_asset(directory, f"minmax-{channel}-{filter_strength}.png", payload)
+    return JSONResponse(
+        {
+            "type": "image",
+            "title": "Min/Max Deviation",
+            "image": _asset_url(session_id, filename),
+            "data": stats,
+            "description": (
+                "Highlights pixels below all eight neighbors or above all eight neighbors in a 3×3 window. "
+                "Optional block filtering summarizes the density of those local extrema."
             ),
         }
     )
