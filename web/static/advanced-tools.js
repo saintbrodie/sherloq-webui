@@ -9,6 +9,24 @@ const advancedTools = [
     },
   },
   {
+    group: "Detail",
+    tool: {
+      key: "frequency-split",
+      label: "Frequency Split",
+      icon: "ƒ±",
+      controls: "frequency-split",
+    },
+  },
+  {
+    group: "Noise",
+    tool: {
+      key: "minmax",
+      label: "Min/Max Deviation",
+      icon: "±",
+      controls: "minmax",
+    },
+  },
+  {
     group: "Noise",
     tool: {
       key: "wavelet-noise",
@@ -93,6 +111,20 @@ buildControls = function buildAdvancedControls(item) {
   const rerun = () => run(item.key, readControls());
   if (item.controls === "header") {
     addNum("Bytes", "bytes_to_read", 512, 64, 4096, 64, rerun);
+    return;
+  }
+  if (item.controls === "frequency-split") {
+    addNum("Separation %", "separation", 15, 0, 100, 1, rerun);
+    addNum("Smooth %", "smooth", 25, 0, 100, 1, rerun);
+    addNum("Threshold %", "threshold", 0, 0, 100, 1, rerun);
+    addNum("Display filter", "display_filter", 0, 0, 15, 1, rerun);
+    return;
+  }
+  if (item.controls === "minmax") {
+    addSelect("Channel", "channel", ["luminance", "red", "green", "blue", "rgb-norm"], "luminance", rerun);
+    addSelect("Minimum", "minimum_color", ["green", "red", "blue", "white", "black"], "green", rerun);
+    addSelect("Maximum", "maximum_color", ["red", "green", "blue", "white", "black"], "red", rerun);
+    addNum("Filter", "filter_strength", 0, 0, 5, 1, rerun);
     return;
   }
   if (item.controls === "wavelet-noise") {
