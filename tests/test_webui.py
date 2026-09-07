@@ -148,6 +148,24 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert header_payload["data"]["overview"]["Detected signature"] == "JPEG"
     assert header_payload["data"]["overview"]["Header bytes shown"] == 128
 
+    minmax = client.get(
+        f"/api/sessions/{session_id}/advanced/minmax"
+        "?channel=luminance&minimum_color=green&maximum_color=red&filter_strength=0"
+    )
+    assert minmax.status_code == 200, minmax.text
+    assert minmax.json()["type"] == "image"
+    assert minmax.json()["data"]["Channel"] == "luminance"
+
+    frequency_split = client.get(
+        f"/api/sessions/{session_id}/advanced/frequency-split"
+        "?separation=15&smooth=10&threshold=0&display_filter=0"
+    )
+    assert frequency_split.status_code == 200, frequency_split.text
+    frequency_payload = frequency_split.json()
+    assert frequency_payload["type"] == "gallery"
+    assert len(frequency_payload["items"]) == 4
+    assert frequency_payload["data"]["Effective smoothing kernel"] <= 511
+
     thumbnail = client.get(f"/api/sessions/{session_id}/tools/thumbnail")
     assert thumbnail.status_code == 200
     assert thumbnail.json()["data"]["Embedded thumbnail"] is False
