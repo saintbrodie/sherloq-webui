@@ -23,7 +23,9 @@ jobs:
       - name: Compile backend
         run: python -m compileall -q web tests
       - name: Check optional worker isolation
-        run: python -c "from web.noiseprint_worker import app; assert app.title == 'Sherloq Noiseprint Worker'"
+        run: |
+          python -c "from web.noiseprint_worker import app; assert app.title == 'Sherloq Noiseprint Worker'"
+          python -c "from web.median_worker import app; assert app.title == 'Sherloq Median Filter Worker'"
       - name: Check browser JavaScript
         run: |
           node --check web/static/app.js
@@ -34,5 +36,7 @@ jobs:
         run: |
           docker compose config >/dev/null
           docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.median.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml -f docker-compose.median.yml config >/dev/null
       - name: Build base container
         run: docker build -t sherloq-webui:test .
