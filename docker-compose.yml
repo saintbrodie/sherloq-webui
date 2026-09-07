@@ -1,0 +1,9 @@
+services:
+  sherloq-webui:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SHERLOQ_MAX_UPLOAD_MB: "40"
+      SHERLOQ_SESSION_TTL_HOURS: "12"
+    restart: unless-stopped
