@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from . import analysis
 from .app import _asset_url, _read_session, _save_asset
+from .file_inspection import inspect_header
 from .forensics_ext import jpeg_ghost_analysis, wavelet_noise_blocking
 from .model_services import analyze_with_service, service_capabilities
 
@@ -60,6 +61,26 @@ def _model_result(
             "image": _asset_url(session_id, filename),
             "data": data,
             "description": str(response.get("description") or default_description),
+        }
+    )
+
+
+@router.get("/header")
+def header_structure(
+    session_id: str,
+    bytes_to_read: int = Query(512, ge=64, le=4096),
+) -> JSONResponse:
+    directory, _ = _read_session(session_id)
+    data = inspect_header(directory / "source.bin", bytes_to_read=bytes_to_read)
+    return JSONResponse(
+        {
+            "type": "groups",
+            "title": "File Header",
+            "data": data,
+            "description": (
+                "Bounded binary header view with common image/RAW signature recognition. "
+                "This is intentionally lightweight and does not attempt ExifTool-level container parsing."
+            ),
         }
     )
 
