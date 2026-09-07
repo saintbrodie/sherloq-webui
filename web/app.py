@@ -26,7 +26,7 @@ WORK_ROOT = Path(
 MAX_UPLOAD_BYTES = int(os.environ.get("SHERLOQ_MAX_UPLOAD_MB", "40")) * 1024 * 1024
 SESSION_TTL_SECONDS = int(os.environ.get("SHERLOQ_SESSION_TTL_HOURS", "12")) * 60 * 60
 
-app = FastAPI(title="Sherloq WebUI", version="0.2.0")
+app = FastAPI(title="Sherloq WebUI", version="0.3.0")
 WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 AVAILABLE_TOOLS = [
@@ -181,7 +181,7 @@ def export_session(session_id: str) -> JSONResponse:
     source = directory / "source.bin"
     image = analysis.load_image(source)
     report = {
-        "sherloq_webui": "0.2.0", "session": session,
+        "sherloq_webui": "0.3.0", "session": session,
         "digest": analysis.digest(source, session["original_name"], image),
         "metadata": analysis.exif_metadata(source),
         "geolocation": analysis.geolocation(source),
