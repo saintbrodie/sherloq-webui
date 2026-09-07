@@ -6,8 +6,61 @@ from fastapi.responses import JSONResponse
 from . import analysis
 from .app import _asset_url, _read_session, _save_asset
 from .forensics_ext import jpeg_ghost_analysis, wavelet_noise_blocking
+from .model_services import analyze_with_service, service_capabilities
 
 router = APIRouter(prefix="/api/sessions/{session_id}/advanced", tags=["advanced-forensics"])
+service_router = APIRouter(tags=["model-services"])
+
+
+@service_router.get("/api/model-services")
+def model_services() -> JSONResponse:
+    return JSONResponse({"services": service_capabilities()})
+
+
+def _model_result(session_id: str, service: str) -> JSONResponse:
+    directory, session = _read_session(session_id)
+    source = directory / "source.bin"
+    try:
+        image, response = analyze_with_service(
+            service,
+            source,
+            session["original_name"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    filename = _save_asset(directory, f"model-{service}.png", image)
+    defaults = {
+        "splicing": (
+            "Noiseprint Composite Splicing",
+            "Noiseprint-based localization from the configured model worker.",
+        ),
+        "trufor": (
+            "TruFor",
+            "TruFor manipulation localization from the configured model worker.",
+        ),
+    }
+    default_title, default_description = defaults[service]
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    return JSONResponse(
+        {
+            "type": "image",
+            "title": str(response.get("title") or default_title),
+            "image": _asset_url(session_id, filename),
+            "data": data,
+            "description": str(response.get("description") or default_description),
+        }
+    )
+
+
+@router.get("/splicing")
+def splicing(session_id: str) -> JSONResponse:
+    return _model_result(session_id, "splicing")
+
+
+@router.get("/trufor")
+def trufor(session_id: str) -> JSONResponse:
+    return _model_result(session_id, "trufor")
 
 
 @router.get("/jpeg-ghosts")
