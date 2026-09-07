@@ -4,6 +4,7 @@ const stereogramTool = SherloqPlugins.registerTool("Inspection", {
   icon: "3D",
 });
 
-SherloqPlugins.registerRunner(stereogramTool.key, (key, params) =>
-  SherloqPlugins.runAdvanced(key, params, key, { buildControls: false }),
-);
+SherloqPlugins.registerRunner(stereogramTool.key, (key) => {
+  el.controls.innerHTML = "";
+  return SherloqPlugins.runAdvanced(key, {}, key, { buildControls: false });
+});
