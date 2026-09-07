@@ -18,6 +18,7 @@ WebUI v0.3 includes:
 - original-image viewer with zoom controls
 - searchable forensic tool rail
 - backend-driven core tool availability plus modular advanced-tool registration
+- automatic discovery of configured model-backed forensic services
 - JSON report export
 - responsive desktop/tablet/mobile layout
 
@@ -51,8 +52,10 @@ WebUI v0.3 includes:
 - contrast / clipping statistics
 - copy-move candidate detection using ORB, BRISK or AKAZE local features
 - Popescu/Farid interpolation probability analysis with Fourier periodicity visualization for resampling traces
+- optional Noiseprint composite-splicing heatmap through an isolated model worker
+- optional TruFor endpoint through the same external-worker contract
 
-The web UI deliberately marks desktop tools that have not been ported yet instead of silently substituting a different analysis.
+The browser enables model-backed buttons only when their service is configured. Tools that are neither locally ported nor configured remain unavailable rather than silently substituting a different analysis.
 
 ## Quick start with Docker
 
@@ -64,7 +67,43 @@ docker compose up --build
 
 Open `http://localhost:8000`.
 
-The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, and removes idle analysis sessions after 12 hours.
+The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, and removes idle analysis sessions after 12 hours. It does **not** install TensorFlow or start any model-backed worker.
+
+### Enable the bundled Noiseprint worker
+
+Noiseprint is deliberately isolated in a second container because the legacy implementation uses TensorFlow-compatible checkpoints plus SciPy/scikit-learn post-processing. Enable it with the Compose override:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.noiseprint.yml \
+  up --build
+```
+
+The main WebUI then discovers `SHERLOQ_NOISEPRINT_URL=http://noiseprint:8101` automatically and enables **Composite Splicing** in the tool rail. The worker is kept internal to the Compose network; port `8101` is not published to the host.
+
+Noiseprint code and model assets included in the legacy Sherloq tree carry the GRIP-UNINA **nonprofit-use** license terms. Review those terms before enabling or redistributing this optional component.
+
+### Connect an external TruFor worker
+
+TruFor remains external because the legacy desktop integration itself expects a separately obtained TruFor repository and model weights. Point Sherloq at a compatible worker with:
+
+```bash
+export SHERLOQ_TRUFOR_URL=http://your-trufor-worker:8102
+```
+
+A compatible model worker exposes `POST /analyze`, accepts the evidence as multipart field `file`, and returns JSON containing:
+
+```json
+{
+  "title": "Tool name",
+  "description": "Optional explanation",
+  "data": {"score": 0.5},
+  "image_base64": "<base64-encoded PNG or other browser-readable image>"
+}
+```
+
+The same contract is used by the bundled Noiseprint worker, so other heavyweight forensic engines can be integrated without adding their runtimes to the main image.
 
 ## Run directly with Python
 
@@ -87,6 +126,10 @@ Then open `http://localhost:8000`.
 | `SHERLOQ_WORKDIR` | system temp directory | Temporary uploaded images and generated analysis assets |
 | `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum upload size in megabytes |
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
+| `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible model worker base URL |
+| `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible model worker base URL |
+| `SHERLOQ_MODEL_TIMEOUT_SECONDS` | `180` | Timeout for model-worker analysis requests |
+| `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum JSON/image response accepted from a model worker |
 
 Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
 
@@ -99,14 +142,18 @@ browser
   ├─ web/static/index.html
   ├─ web/static/styles.css
   ├─ web/static/app.js              core workspace
-  └─ web/static/advanced-tools.js   modular advanced controls
+  └─ web/static/advanced-tools.js   advanced + model-service discovery
           │
           ▼
 FastAPI  web/main.py
           │
           ├─ web/app.py             core sessions + core tool API
-          └─ web/advanced_api.py    advanced forensic routes
+          ├─ web/advanced_api.py    advanced forensic/model proxy routes
+          └─ web/model_services.py  bounded worker transport contract
                     │
+                    ├──────────── optional HTTP workers
+                    │               ├─ bundled Noiseprint worker
+                    │               └─ external TruFor/other workers
                     ▼
 headless analysis
   ├─ web/analysis.py       core / lightweight tools
@@ -123,18 +170,21 @@ headless analysis
 
 This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports should put reusable computation in a headless module and expose only structured results through the API. The browser should remain responsible for controls, rendering, and interaction.
 
-`web/main.py` is the deployment entry point. Keeping advanced routers separate gives model-backed tools such as Noiseprint or TruFor a future integration point without forcing their ML runtimes into the normal CPU-friendly image.
+`web/main.py` is the deployment entry point. Heavyweight model services communicate over a small HTTP contract, so TensorFlow/PyTorch dependencies and GPU requirements stay outside the normal CPU-friendly WebUI process.
 
 ## API
 
 Useful endpoints:
 
 - `GET /api/health` — service health check
+- `GET /api/model-services` — report whether optional model services are configured
 - `POST /api/sessions` — upload an evidence image and create an analysis session
 - `POST /api/sessions/{id}/reference` — upload a same-size comparison reference
 - `GET /api/sessions/{id}/tools/{tool}` — run a core forensic tool
 - `GET /api/sessions/{id}/advanced/wavelet-noise` — run local wavelet-noise blocking analysis
 - `GET /api/sessions/{id}/advanced/jpeg-ghosts` — run the JPEG ghost quality sweep
+- `GET /api/sessions/{id}/advanced/splicing` — proxy to configured Noiseprint service
+- `GET /api/sessions/{id}/advanced/trufor` — proxy to configured TruFor service
 - `GET /api/sessions/{id}/assets/{file}` — retrieve generated visual output
 - `GET /api/sessions/{id}/export` — download a JSON report
 
@@ -144,18 +194,17 @@ FastAPI also provides its normal interactive API documentation at `/docs`.
 
 The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed core single-image tool, including the resampling probability/Fourier path. It also runs wavelet-noise blocking and a reduced JPEG-ghost quality sweep, verifies clean handling of a JPEG without an embedded thumbnail, exercises the complete reference-comparison workflow, and rejects mismatched reference dimensions rather than silently resizing them.
 
-GitHub Actions compiles all Python modules and tests, syntax-checks both browser scripts, runs pytest, and builds the Docker image. Pull requests use one CI run per update rather than duplicate branch-push and PR runs.
+The suite also verifies that model-backed services are disabled cleanly when no worker is configured. GitHub Actions compiles all Python modules and tests, imports the Noiseprint worker without installing TensorFlow to verify lazy isolation, syntax-checks both browser scripts, validates the base and Noiseprint Compose configurations, runs pytest, and builds the lightweight base Docker image.
 
 ## Port status / next targets
 
-The desktop project still has broader coverage. Good next ports are:
+The largest remaining parity targets are:
 
-1. composite-splicing / Noiseprint analysis as an optional model-backed component
-2. median-filter model integration
-3. optional TruFor model service
-4. RAW-image decoding support
-5. additional comparison metrics where they can be implemented without large native binaries
-6. more legacy utilities such as enhanced magnifier and adjustment views where they provide forensic value in a browser
+1. median-filter model integration
+2. a packaged/validated TruFor worker once its separately distributed repository and weights are supplied
+3. RAW-image decoding support
+4. additional comparison metrics where they can be implemented without large native binaries
+5. more legacy utilities such as enhanced magnifier and adjustment views where they provide forensic value in a browser
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
@@ -177,4 +226,4 @@ Forensic image analysis is not a single-score problem. Compression, resizing, de
 
 ## License and attribution
 
-This fork retains Sherloq's existing license and the original project's history. The browser port is intended to preserve the open, inspectable nature of the original toolkit while making it easier to host and use across machines.
+This fork retains Sherloq's existing license and the original project's history. Optional third-party forensic components retain their own upstream licenses; in particular, the included legacy Noiseprint code/model assets state nonprofit-use terms. The browser port is intended to preserve the open, inspectable nature of the original toolkit while making it easier to host and use across machines.
