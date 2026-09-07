@@ -1,0 +1,27 @@
+name: WebUI smoke test
+
+on:
+  push:
+    branches:
+      - master
+      - "webui/**"
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Compile backend
+        run: python -m py_compile web/analysis.py web/app.py
+      - name: Run API smoke tests
+        run: pytest -q
+      - name: Build container
+        run: docker build -t sherloq-webui:test .
