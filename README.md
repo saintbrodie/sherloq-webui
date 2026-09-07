@@ -5,35 +5,50 @@
 
 # Sherloq WebUI
 
-This fork is turning Sherloq's desktop forensic toolkit into a hostable browser application. The original PySide desktop implementation is preserved in [`gui/`](gui/) while the new web application lives in [`web/`](web/).
+This fork is turning Sherloq's desktop forensic toolkit into a hostable browser application. The original PySide desktop implementation is preserved in [`gui/`](gui/) while the browser application lives in [`web/`](web/).
 
 The goal is not to create an automatic "real/fake" detector. Sherloq remains an analyst's toolbox: individual techniques surface clues that need to be interpreted together and in context.
 
 ## What works in the WebUI now
 
-The initial browser port includes:
+WebUI v0.2 includes:
 
+### Workspace
 - drag-and-drop image upload and an evidence workspace
 - original-image viewer with zoom controls
 - searchable forensic tool rail
+- backend-driven tool availability, so newly ported tools automatically become usable in the browser
+- JSON report export
+- responsive desktop/tablet/mobile layout
+
+### General and metadata
 - file digest with MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
 - EXIF / image metadata inspection
+- EXIF GPS extraction with decimal coordinates and an optional OpenStreetMap link
+
+### Inspection and color
 - RGB + luminance histograms
 - channel inspection
 - HSV and Lab channel views
-- error level analysis with interactive JPEG quality and gain controls
-- median-filter noise residual analysis
+- per-channel pixel statistics
+- RGB principal-component projection with explained variance
+- same-size reference-image comparison with normalized difference, SSIM map, RMSE, MAE, PSNR, SSIM and histogram correlation
+
+### Detail and noise
 - luminance gradient map
 - echo / high-frequency edge map
 - 2D frequency spectrum
+- wavelet threshold reconstruction with selectable wavelet, threshold, level and mode
+- median-filter noise residual analysis
 - grayscale bit-plane decomposition
-- contrast / clipping statistics
-- JPEG quantization-table quality estimation
-- JSON report export
-- responsive desktop/tablet/mobile layout
-- Docker and Docker Compose deployment
 
-The web UI deliberately marks tools that have not been ported yet instead of silently substituting a different analysis.
+### JPEG and tampering
+- JPEG quantization-table quality estimation
+- error level analysis with interactive JPEG quality and gain controls
+- contrast / clipping statistics
+- copy-move candidate detection using ORB, BRISK or AKAZE local features
+
+The web UI deliberately marks desktop tools that have not been ported yet instead of silently substituting a different analysis.
 
 ## Quick start with Docker
 
@@ -63,19 +78,17 @@ Then open `http://localhost:8000`.
 
 ## Configuration
 
-The web service supports these environment variables:
-
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SHERLOQ_WORKDIR` | system temp directory | Temporary uploaded images and generated analysis assets |
 | `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum upload size in megabytes |
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
 
-Uploads are processed by the machine hosting Sherloq WebUI. This first version intentionally has no cloud-storage or third-party analysis dependency.
+Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service.
 
 ## Architecture
 
-The port separates Sherloq's algorithms from its old Qt widgets:
+The browser port separates Sherloq's algorithms from its old Qt widgets:
 
 ```text
 browser
@@ -86,42 +99,55 @@ browser
           ▼
 FastAPI  web/app.py
           │
+          ├─ session / upload handling
+          └─ result serialization
+          │
           ▼
-headless analysis  web/analysis.py
+headless analysis
+  ├─ web/analysis.py    core / lightweight tools
+  └─ web/advanced.py    comparison, PCA, wavelets, copy-move, GPS
           │
           ├─ OpenCV
           ├─ NumPy
-          └─ Pillow
+          ├─ Pillow
+          └─ PyWavelets
 ```
 
-This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports should put reusable analysis in `web/analysis.py` (or a dedicated headless module) and expose the result through the API. The browser should only be responsible for controls, rendering, and interaction.
+This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports should put reusable computation in a headless module and expose only structured results through the API. The browser should remain responsible for controls, rendering, and interaction.
 
 ## API
 
-Useful endpoints in the first port:
+Useful endpoints:
 
 - `GET /api/health` — service health check
-- `POST /api/sessions` — upload an image and create an analysis session
+- `POST /api/sessions` — upload an evidence image and create an analysis session
+- `POST /api/sessions/{id}/reference` — upload a same-size comparison reference
 - `GET /api/sessions/{id}/tools/{tool}` — run a forensic tool
 - `GET /api/sessions/{id}/assets/{file}` — retrieve generated visual output
 - `GET /api/sessions/{id}/export` — download a JSON report
 
 FastAPI also provides its normal interactive API documentation at `/docs`.
 
+## Validation
+
+The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed single-image tool. It also verifies the complete reference-comparison workflow and rejects mismatched reference dimensions rather than silently resizing them.
+
+GitHub Actions runs Python compilation, pytest, and a Docker image build for the WebUI branch.
+
 ## Port status / next targets
 
-The original Sherloq desktop project contains substantially more tooling. The next useful ports are:
+The desktop project still has substantially broader coverage. Good next ports are:
 
-1. copy-move forgery detection with BRISK / ORB / AKAZE controls
-2. image resampling analysis
-3. composite-splicing analysis
-4. wavelet threshold and wavelet blocking views
-5. thumbnail extraction and GPS presentation
-6. synchronized reference comparison
-7. PCA / RGB-HSV plots and pixel statistics
-8. median-filter model integration
-9. optional TruFor model service
-10. RAW-image decoding support
+1. image resampling analysis
+2. composite-splicing analysis
+3. embedded thumbnail extraction and source/thumbnail difference inspection
+4. wavelet noise-blocking analysis
+5. JPEG ghost maps and deeper compression visualizations
+6. median-filter model integration
+7. additional comparison metrics where they can be implemented without large native binaries
+8. optional TruFor model service
+9. RAW-image decoding support
+10. more legacy utilities such as enhancing magnifier and adjustment views where they provide forensic value in a browser
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
