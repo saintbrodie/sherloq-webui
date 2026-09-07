@@ -9,6 +9,15 @@ const advancedTools = [
     },
   },
   {
+    group: "Inspection",
+    tool: {
+      key: "adjustments",
+      label: "Global Adjustments",
+      icon: "☼",
+      controls: "adjustments",
+    },
+  },
+  {
     group: "Detail",
     tool: {
       key: "frequency-split",
@@ -120,6 +129,21 @@ buildControls = function buildAdvancedControls(item) {
   const rerun = () => run(item.key, readControls());
   if (item.controls === "header") {
     addNum("Bytes", "bytes_to_read", 512, 64, 4096, 64, rerun);
+    return;
+  }
+  if (item.controls === "adjustments") {
+    addNum("Brightness", "brightness", 0, -255, 255, 1, rerun);
+    addNum("Saturation", "saturation", 0, -255, 255, 1, rerun);
+    addNum("Hue °", "hue", 0, 0, 180, 1, rerun);
+    addNum("Gamma ×0.1", "gamma_tenths", 10, 1, 50, 1, rerun);
+    addNum("Shadows %", "shadows", 0, -100, 100, 1, rerun);
+    addNum("Highlights %", "highlights", 0, -100, 100, 1, rerun);
+    addNum("Sweep", "sweep", 127, 0, 255, 1, rerun);
+    addNum("Width", "width", 255, 0, 255, 1, rerun);
+    addNum("Sharpen %", "sharpen", 0, 0, 100, 1, rerun);
+    addNum("Threshold", "threshold", 255, 0, 255, 1, rerun);
+    addSelect("Equalize", "equalize", ["none", "hist", "clahe-2", "clahe-5", "clahe-10", "clahe-20"], "none", rerun);
+    addSelect("Invert", "invert", ["false", "true"], "false", rerun);
     return;
   }
   if (item.controls === "frequency-split") {
