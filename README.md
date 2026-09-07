@@ -24,6 +24,7 @@ WebUI v0.2 includes:
 ### General and metadata
 - file digest with MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
 - EXIF / image metadata inspection
+- embedded JPEG EXIF thumbnail extraction, full-size reconstruction, and source/thumbnail difference view
 - EXIF GPS extraction with decimal coordinates and an optional OpenStreetMap link
 
 ### Inspection and color
@@ -84,7 +85,7 @@ Then open `http://localhost:8000`.
 | `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum upload size in megabytes |
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
 
-Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service.
+Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
 
 ## Architecture
 
@@ -104,8 +105,9 @@ FastAPI  web/app.py
           │
           ▼
 headless analysis
-  ├─ web/analysis.py    core / lightweight tools
-  └─ web/advanced.py    comparison, PCA, wavelets, copy-move, GPS
+  ├─ web/analysis.py     core / lightweight tools
+  ├─ web/advanced.py     comparison, PCA, wavelets, copy-move, GPS
+  └─ web/jpeg_tools.py   JPEG EXIF thumbnail parsing and comparison
           │
           ├─ OpenCV
           ├─ NumPy
@@ -130,7 +132,7 @@ FastAPI also provides its normal interactive API documentation at `/docs`.
 
 ## Validation
 
-The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed single-image tool. It also verifies the complete reference-comparison workflow and rejects mismatched reference dimensions rather than silently resizing them.
+The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed single-image tool. It also verifies clean handling of a JPEG without an embedded thumbnail, the complete reference-comparison workflow, and rejection of mismatched reference dimensions rather than silently resizing them.
 
 GitHub Actions runs Python compilation, pytest, and a Docker image build for the WebUI branch.
 
@@ -138,16 +140,15 @@ GitHub Actions runs Python compilation, pytest, and a Docker image build for the
 
 The desktop project still has substantially broader coverage. Good next ports are:
 
-1. image resampling analysis
-2. composite-splicing analysis
-3. embedded thumbnail extraction and source/thumbnail difference inspection
-4. wavelet noise-blocking analysis
-5. JPEG ghost maps and deeper compression visualizations
-6. median-filter model integration
-7. additional comparison metrics where they can be implemented without large native binaries
-8. optional TruFor model service
-9. RAW-image decoding support
-10. more legacy utilities such as enhancing magnifier and adjustment views where they provide forensic value in a browser
+1. image resampling analysis using the original Farid / Popescu probability and Fourier workflow
+2. composite-splicing / Noiseprint analysis as an optional model-backed component
+3. wavelet noise-blocking analysis
+4. JPEG ghost maps and deeper compression visualizations
+5. median-filter model integration
+6. additional comparison metrics where they can be implemented without large native binaries
+7. optional TruFor model service
+8. RAW-image decoding support
+9. more legacy utilities such as enhancing magnifier and adjustment views where they provide forensic value in a browser
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
