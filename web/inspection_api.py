@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from . import analysis
 from .app import _asset_url, _read_session, _save_asset
+from .color_plots import rgb_hsv_plot_data
 from .inspection_tools import global_adjustments, space_conversion
 from .magnifier import enhancing_magnifier
 
@@ -137,3 +138,36 @@ def selectable_space_conversion(
             ),
         }
     )
+
+
+@router.get("/rgb-hsv-plots")
+def rgb_hsv_plots(
+    session_id: str,
+    x_axis: str = Query("hue"),
+    y_axis: str = Query("saturation"),
+    z_axis: str = Query("value"),
+    sampling: int = Query(1, ge=0, le=16),
+    view: str = Query("2d"),
+    point_size: int = Query(1, ge=1, le=10),
+    alpha: float = Query(1.0, ge=0.05, le=1.0),
+    show_colors: bool = Query(False),
+    grid: bool = Query(False),
+) -> JSONResponse:
+    directory, _ = _read_session(session_id)
+    image = analysis.load_image(directory / "source.bin")
+    try:
+        result = rgb_hsv_plot_data(
+            image,
+            x_axis=x_axis,
+            y_axis=y_axis,
+            z_axis=z_axis,
+            sampling=sampling,
+            view=view,
+            point_size=point_size,
+            alpha=alpha,
+            show_colors=show_colors,
+            grid=grid,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return JSONResponse(result)
