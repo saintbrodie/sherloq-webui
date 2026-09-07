@@ -1,5 +1,14 @@
 const advancedTools = [
   {
+    group: "General",
+    tool: {
+      key: "header",
+      label: "File Header",
+      icon: "0x",
+      controls: "header",
+    },
+  },
+  {
     group: "Noise",
     tool: {
       key: "wavelet-noise",
@@ -82,6 +91,10 @@ buildControls = function buildAdvancedControls(item) {
 
   el.controls.innerHTML = "";
   const rerun = () => run(item.key, readControls());
+  if (item.controls === "header") {
+    addNum("Bytes", "bytes_to_read", 512, 64, 4096, 64, rerun);
+    return;
+  }
   if (item.controls === "wavelet-noise") {
     addNum("Block", "block_size", 8, 1, 64, 1, rerun);
     return;
