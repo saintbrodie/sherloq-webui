@@ -11,13 +11,13 @@ The goal is not to create an automatic "real/fake" detector. Sherloq remains an 
 
 ## What works in the WebUI now
 
-WebUI v0.2 includes:
+WebUI v0.3 includes:
 
 ### Workspace
 - drag-and-drop image upload and an evidence workspace
 - original-image viewer with zoom controls
 - searchable forensic tool rail
-- backend-driven tool availability, so newly ported tools automatically become usable in the browser
+- backend-driven core tool availability plus modular advanced-tool registration
 - JSON report export
 - responsive desktop/tablet/mobile layout
 
@@ -41,11 +41,13 @@ WebUI v0.2 includes:
 - 2D frequency spectrum
 - wavelet threshold reconstruction with selectable wavelet, threshold, level and mode
 - median-filter noise residual analysis
+- Mahdian/Saic local wavelet-noise blocking map using db8 diagonal coefficients
 - grayscale bit-plane decomposition
 
 ### JPEG and tampering
 - JPEG quantization-table quality estimation
 - error level analysis with interactive JPEG quality and gain controls
+- Farid-style JPEG ghost maps with quality sweep and 8×8 lattice-offset controls
 - contrast / clipping statistics
 - copy-move candidate detection using ORB, BRISK or AKAZE local features
 - Popescu/Farid interpolation probability analysis with Fourier periodicity visualization for resampling traces
@@ -73,7 +75,7 @@ python -m venv .venv
 source .venv/bin/activate       # Linux/macOS
 # .venv\Scripts\activate      # Windows
 pip install -r requirements-web.txt
-uvicorn web.app:app --host 0.0.0.0 --port 8000
+uvicorn web.main:app --host 0.0.0.0 --port 8000
 ```
 
 Then open `http://localhost:8000`.
@@ -88,7 +90,7 @@ Then open `http://localhost:8000`.
 
 Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
 
-Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Large images should be cropped to a suspected region before running that tool.
+Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Large images should be cropped to a suspected region before running that tool. JPEG ghost analysis likewise has an interactive-size guard because a quality sweep repeatedly recompresses the full evidence image.
 
 ## Architecture
 
@@ -96,20 +98,22 @@ Resampling analysis deliberately does not downscale oversized evidence because r
 browser
   ├─ web/static/index.html
   ├─ web/static/styles.css
-  └─ web/static/app.js
+  ├─ web/static/app.js              core workspace
+  └─ web/static/advanced-tools.js   modular advanced controls
           │
           ▼
-FastAPI  web/app.py
+FastAPI  web/main.py
           │
-          ├─ session / upload handling
-          └─ result serialization
-          │
-          ▼
+          ├─ web/app.py             core sessions + core tool API
+          └─ web/advanced_api.py    advanced forensic routes
+                    │
+                    ▼
 headless analysis
-  ├─ web/analysis.py     core / lightweight tools
-  ├─ web/advanced.py     comparison, PCA, wavelets, copy-move, GPS
-  ├─ web/jpeg_tools.py   JPEG EXIF thumbnail parsing and comparison
-  └─ web/resampling.py   interpolation probability + Fourier analysis
+  ├─ web/analysis.py       core / lightweight tools
+  ├─ web/advanced.py       comparison, PCA, wavelets, copy-move, GPS
+  ├─ web/jpeg_tools.py     JPEG EXIF thumbnail parsing and comparison
+  ├─ web/resampling.py     interpolation probability + Fourier analysis
+  └─ web/forensics_ext.py  JPEG ghosts + wavelet noise blocking
           │
           ├─ OpenCV
           ├─ NumPy
@@ -119,6 +123,8 @@ headless analysis
 
 This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports should put reusable computation in a headless module and expose only structured results through the API. The browser should remain responsible for controls, rendering, and interaction.
 
+`web/main.py` is the deployment entry point. Keeping advanced routers separate gives model-backed tools such as Noiseprint or TruFor a future integration point without forcing their ML runtimes into the normal CPU-friendly image.
+
 ## API
 
 Useful endpoints:
@@ -126,7 +132,9 @@ Useful endpoints:
 - `GET /api/health` — service health check
 - `POST /api/sessions` — upload an evidence image and create an analysis session
 - `POST /api/sessions/{id}/reference` — upload a same-size comparison reference
-- `GET /api/sessions/{id}/tools/{tool}` — run a forensic tool
+- `GET /api/sessions/{id}/tools/{tool}` — run a core forensic tool
+- `GET /api/sessions/{id}/advanced/wavelet-noise` — run local wavelet-noise blocking analysis
+- `GET /api/sessions/{id}/advanced/jpeg-ghosts` — run the JPEG ghost quality sweep
 - `GET /api/sessions/{id}/assets/{file}` — retrieve generated visual output
 - `GET /api/sessions/{id}/export` — download a JSON report
 
@@ -134,22 +142,20 @@ FastAPI also provides its normal interactive API documentation at `/docs`.
 
 ## Validation
 
-The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed single-image tool, including the resampling probability/Fourier path. It also verifies clean handling of a JPEG without an embedded thumbnail, the complete reference-comparison workflow, and rejection of mismatched reference dimensions rather than silently resizing them.
+The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed core single-image tool, including the resampling probability/Fourier path. It also runs wavelet-noise blocking and a reduced JPEG-ghost quality sweep, verifies clean handling of a JPEG without an embedded thumbnail, exercises the complete reference-comparison workflow, and rejects mismatched reference dimensions rather than silently resizing them.
 
-GitHub Actions runs Python compilation, pytest, and a Docker image build for the WebUI branch.
+GitHub Actions compiles all Python modules and tests, syntax-checks both browser scripts, runs pytest, and builds the Docker image. Pull requests use one CI run per update rather than duplicate branch-push and PR runs.
 
 ## Port status / next targets
 
-The desktop project still has substantially broader coverage. Good next ports are:
+The desktop project still has broader coverage. Good next ports are:
 
 1. composite-splicing / Noiseprint analysis as an optional model-backed component
-2. wavelet noise-blocking analysis
-3. JPEG ghost maps and deeper compression visualizations
-4. median-filter model integration
+2. median-filter model integration
+3. optional TruFor model service
+4. RAW-image decoding support
 5. additional comparison metrics where they can be implemented without large native binaries
-6. optional TruFor model service
-7. RAW-image decoding support
-8. more legacy utilities such as enhancing magnifier and adjustment views where they provide forensic value in a browser
+6. more legacy utilities such as enhanced magnifier and adjustment views where they provide forensic value in a browser
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
