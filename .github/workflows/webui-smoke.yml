@@ -22,11 +22,17 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Compile backend
         run: python -m compileall -q web tests
+      - name: Check optional worker isolation
+        run: python -c "from web.noiseprint_worker import app; assert app.title == 'Sherloq Noiseprint Worker'"
       - name: Check browser JavaScript
         run: |
           node --check web/static/app.js
           node --check web/static/advanced-tools.js
       - name: Run API smoke tests
         run: pytest -q
-      - name: Build container
+      - name: Validate Compose configurations
+        run: |
+          docker compose config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml config >/dev/null
+      - name: Build base container
         run: docker build -t sherloq-webui:test .
