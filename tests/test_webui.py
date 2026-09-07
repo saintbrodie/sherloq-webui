@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from web.main import app
 
@@ -44,6 +45,58 @@ def _sample_image(path: Path, shift: int = 0, size: tuple[int, int] = (240, 180)
         image[25:65, 30:80] = (225, 35, 75)
         image[95:135, 145:195] = (225, 35, 75)
     Image.fromarray(image).save(path, quality=87)
+
+
+def test_raw_decoder_fallback_and_metadata(tmp_path: Path, monkeypatch) -> None:
+    import web.analysis as analysis
+
+    source = tmp_path / "camera.nef"
+    source.write_bytes(b"synthetic raw fixture boundary")
+    calls: list[tuple[bool, bool]] = []
+
+    class FakeRaw:
+        sizes = SimpleNamespace(raw_width=8, raw_height=6, width=6, height=4)
+        color_desc = b"RGBG"
+        raw_pattern = np.array([[0, 1], [3, 2]], dtype=np.uint8)
+        camera_whitebalance = [2.0, 1.0, 1.5, 1.0]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def postprocess(self, *, no_auto_bright: bool, use_camera_wb: bool):
+            calls.append((no_auto_bright, use_camera_wb))
+            rgb = np.zeros((4, 6, 3), dtype=np.uint8)
+            rgb[..., 0] = 10
+            rgb[..., 1] = 20
+            rgb[..., 2] = 30
+            return rgb
+
+    fake_rawpy = SimpleNamespace(imread=lambda _: FakeRaw())
+    monkeypatch.setattr(analysis.cv, "imdecode", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(analysis, "_rawpy_module", lambda: fake_rawpy)
+
+    decoded = analysis.load_image(source)
+    assert decoded.shape == (4, 6, 3)
+    assert decoded[0, 0].tolist() == [30, 20, 10]
+    assert calls == [(True, True)]
+
+    def unreadable_by_pillow(*_args, **_kwargs):
+        raise UnidentifiedImageError("RAW")
+
+    monkeypatch.setattr(analysis.Image, "open", unreadable_by_pillow)
+    metadata = analysis.exif_metadata(source)
+    assert metadata["Format"] == "RAW"
+    assert metadata["Visible width"] == 6
+    assert metadata["Visible height"] == 4
+    assert metadata["Color description"] == "RGBG"
+    assert metadata["Raw pattern"] == [[0, 1], [3, 2]]
+
+    quality = analysis.jpeg_quality(source)
+    assert quality["JPEG"] is False
+    assert quality["Estimated quality"] is None
 
 
 def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
