@@ -1,34 +1,25 @@
-const plotTool = {
-  key: "rgb-hsv-plots",
-  label: "RGB / HSV Plots",
-  icon: "•",
-  controls: "rgb-hsv-plots",
-};
-
-const inspectionGroup = groups.find((group) => group.label === "Inspection");
-if (inspectionGroup && !inspectionGroup.tools.some((item) => item.key === plotTool.key)) {
-  inspectionGroup.tools.push(plotTool);
-}
+const plotTool = SherloqPlugins.registerTool(
+  "Inspection",
+  {
+    key: "rgb-hsv-plots",
+    label: "RGB / HSV Plots",
+    icon: "•",
+    controls: "rgb-hsv-plots",
+  },
+);
 
 const plotAxes = ["red", "green", "blue", "hue", "saturation", "value"];
 
-const previousPlotUpload = upload;
-upload = async function uploadWithPlots(file) {
-  await previousPlotUpload(file);
-  if (state.session) {
-    state.available.add(plotTool.key);
-    renderNav(el.search.value);
-  }
-};
-
-const previousPlotBuildControls = buildControls;
-buildControls = function buildPlotControls(item) {
-  if (item?.key !== plotTool.key) return previousPlotBuildControls(item);
-
-  el.controls.innerHTML = "";
+SherloqPlugins.registerControls(plotTool.key, (item) => {
   const rerun = () => run(item.key, readControls());
-  const minDimension = Math.max(1, Math.min(state.session?.width || 1, state.session?.height || 1));
-  const maxSampling = Math.max(0, Math.min(12, Math.floor(Math.log2(minDimension)) - 1));
+  const minDimension = Math.max(
+    1,
+    Math.min(state.session?.width || 1, state.session?.height || 1),
+  );
+  const maxSampling = Math.max(
+    0,
+    Math.min(12, Math.floor(Math.log2(minDimension)) - 1),
+  );
   addSelect("View", "view", ["2d", "3d"], "2d", rerun);
   addSelect("X", "x_axis", plotAxes, "hue", rerun);
   addSelect("Y", "y_axis", plotAxes, "saturation", rerun);
@@ -38,7 +29,7 @@ buildControls = function buildPlotControls(item) {
   addNum("Alpha", "alpha", 1, 0.05, 1, 0.05, rerun);
   addSelect("Colors", "show_colors", ["false", "true"], "false", rerun);
   addSelect("Grid", "grid", ["false", "true"], "false", rerun);
-};
+});
 
 function scatterColor(point, alpha, showColors) {
   if (!showColors) return `rgba(121,226,179,${alpha})`;
@@ -75,7 +66,11 @@ function drawScatter2d(context, width, height, result) {
   const alpha = Number(config.alpha ?? 1);
   const showColors = Boolean(config.show_colors);
   if (!showColors) {
-    context.fillStyle = scatterColor(result.points[0] || [0, 0, 0, 0, 0, 0], alpha, false);
+    context.fillStyle = scatterColor(
+      result.points[0] || [0, 0, 0, 0, 0, 0],
+      alpha,
+      false,
+    );
     for (const point of result.points || []) {
       const x = padding + point[0] * plotWidth;
       const y = height - padding - point[1] * plotHeight;
@@ -132,7 +127,12 @@ function drawScatter3d(context, width, height, result, yaw, pitch) {
     if (showColors) context.fillStyle = scatterColor(item.point, alpha, true);
     const perspective = 0.75 + (item.depth + 0.75) * 0.22;
     const pointSize = Math.max(1, size * perspective);
-    context.fillRect(item.x - pointSize / 2, item.y - pointSize / 2, pointSize, pointSize);
+    context.fillRect(
+      item.x - pointSize / 2,
+      item.y - pointSize / 2,
+      pointSize,
+      pointSize,
+    );
   }
 
   context.fillStyle = "#8d9aa7";
@@ -145,7 +145,9 @@ function drawScatter3d(context, width, height, result, yaw, pitch) {
 }
 
 function renderScatter(result) {
-  const description = result.description ? `<p class="desc">${esc(result.description)}</p>` : "";
+  const description = result.description
+    ? `<p class="desc">${esc(result.description)}</p>`
+    : "";
   const details = result.data ? section("Details", result.data) : "";
   el.body.innerHTML = `<div class="result">${description}<div class="hist"><canvas id="scatterCanvas" style="height:520px"></canvas></div>${details}</div>`;
   const canvas = document.querySelector("#scatterCanvas");
@@ -168,8 +170,11 @@ function renderScatter(result) {
     context.clearRect(0, 0, width, height);
     context.fillStyle = "#0c1218";
     context.fillRect(0, 0, width, height);
-    if (result.plot?.view === "3d") drawScatter3d(context, width, height, result, yaw, pitch);
-    else drawScatter2d(context, width, height, result);
+    if (result.plot?.view === "3d") {
+      drawScatter3d(context, width, height, result, yaw, pitch);
+    } else {
+      drawScatter2d(context, width, height, result);
+    }
   };
 
   if (result.plot?.view === "3d") {
@@ -184,7 +189,10 @@ function renderScatter(result) {
     canvas.addEventListener("pointermove", (event) => {
       if (!dragging) return;
       yaw += (event.clientX - previousX) * 0.01;
-      pitch = Math.max(-1.3, Math.min(1.3, pitch + (event.clientY - previousY) * 0.01));
+      pitch = Math.max(
+        -1.3,
+        Math.min(1.3, pitch + (event.clientY - previousY) * 0.01),
+      );
       previousX = event.clientX;
       previousY = event.clientY;
       draw();
@@ -200,41 +208,7 @@ function renderScatter(result) {
   draw();
 }
 
-renderResult = function renderResultWithPlots(result) {
-  if (result?.type === "scatter") {
-    renderScatter(result);
-    return;
-  }
-  coreRenderResult(result);
-};
-
-const previousPlotRun = run;
-run = async function runWithPlots(key, params = null) {
-  if (key !== plotTool.key) return previousPlotRun(key, params);
-  if (!state.session || !state.available.has(key)) return;
-  if (typeof setMagnifierActive === "function") setMagnifierActive(false);
-
-  state.active = key;
-  renderNav(el.search.value);
-  const item = tool(key);
-  if (params === null) buildControls(item);
-  el.title.textContent = item.label;
-  const token = ++state.request;
-  loading(`Running ${item.label}…`);
-  const query = new URLSearchParams(params || readControls());
-
-  try {
-    const response = await fetch(
-      `/api/sessions/${state.session.id}/advanced/${key}${query.size ? `?${query}` : ""}`,
-    );
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Analysis failed");
-    if (token !== state.request) return;
-    el.title.textContent = data.title || item.label;
-    renderResult(data);
-  } catch (exception) {
-    if (token === state.request) error(exception.message || String(exception));
-  }
-};
-
-renderNav(el.search.value);
+SherloqPlugins.registerRenderer("scatter", renderScatter);
+SherloqPlugins.registerRunner(plotTool.key, (key, params) =>
+  SherloqPlugins.runAdvanced(key, params),
+);
