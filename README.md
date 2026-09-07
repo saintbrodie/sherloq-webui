@@ -11,7 +11,7 @@ Sherloq is an analyst toolbox, not an automatic "real/fake" detector. Individual
 
 ## Current status
 
-WebUI v0.3 now covers nearly all desktop Sherloq tools that the upstream tool registry marks as functional or in active/debug state. Heavy model-backed tools are isolated behind optional workers, and desktop utilities that were already external websites remain explicit external handoffs rather than silently uploading evidence.
+WebUI v0.3 covers nearly all desktop Sherloq tools that the upstream tool registry marks as functional or in active/debug state. Heavy model-backed tools are isolated behind optional workers, and desktop utilities that were already external websites remain explicit external handoffs rather than silently uploading evidence.
 
 ### Workspace and case handling
 - drag-and-drop and file-picker evidence loading
@@ -21,8 +21,9 @@ WebUI v0.3 now covers nearly all desktop Sherloq tools that the upstream tool re
 - same-size secondary reference upload for comparison workflows
 - automatic discovery of configured model-backed services
 - exact-byte original-evidence download
+- explicit **Clear evidence** action that immediately deletes the active source, reference, generated assets and analysis history from the server
 - bounded per-session analysis history
-- JSON report export including the analyses, parameters, quantitative data and generated-asset references used during the browser session
+- JSON report export including analyses, parameters, quantitative data and generated-asset references used during the browser session
 
 Analysis history is bounded to 200 entries per session and 256 KB per individual record. Generated images are referenced by session asset path rather than duplicated into the JSON report.
 
@@ -103,6 +104,22 @@ Open `http://localhost:8000`.
 
 The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, removes idle sessions after 12 hours, and includes the lightweight RAW decoder. It does **not** install TensorFlow or XGBoost or start any model-backed worker.
 
+### Optional built-in login
+
+Sherloq can protect the entire same-origin UI/API with HTTP Basic authentication:
+
+```bash
+export SHERLOQ_BASIC_AUTH_USER=analyst
+export SHERLOQ_BASIC_AUTH_PASSWORD='choose-a-long-password'
+docker compose up --build
+```
+
+Both variables must be set together. A partial configuration causes startup to fail rather than silently leaving the service open.
+
+HTTP Basic credentials are encoded, **not encrypted**. Use this on a trusted isolated LAN or behind HTTPS/TLS (for example, a reverse proxy that terminates TLS). Do not expose a Basic-auth-only plain-HTTP deployment to an untrusted network.
+
+If you already use an authenticated reverse proxy, leave the Sherloq Basic-auth variables unset.
+
 ### Enable Noiseprint
 
 ```bash
@@ -156,6 +173,8 @@ Then open `http://localhost:8000`.
 | `SHERLOQ_WORKDIR` | system temp directory | Temporary evidence, session metadata and generated assets |
 | `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum evidence/reference upload size |
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
+| `SHERLOQ_BASIC_AUTH_USER` | unset | Optional whole-app HTTP Basic username |
+| `SHERLOQ_BASIC_AUTH_PASSWORD` | unset | Optional whole-app HTTP Basic password; must be set with username |
 | `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible worker URL |
 | `SHERLOQ_MEDIAN_URL` | unset | Median-filter worker URL |
 | `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible worker URL |
@@ -163,6 +182,19 @@ Then open `http://localhost:8000`.
 | `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum accepted model-worker JSON/image response |
 
 Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local. The backend does not automatically contact mapping, reverse-search or other third-party services.
+
+## Deployment hardening
+
+- the base container runs as non-root UID `10001`
+- Noiseprint and median worker images declare dedicated non-root users as well
+- optional same-origin HTTP Basic authentication
+- Content Security Policy limits script/network/image sources to the self-hosted app
+- clickjacking, MIME sniffing, referrer, COOP/CORP and browser-permission headers are set by default
+- every `/api/` response uses `Cache-Control: no-store` and `Pragma: no-cache`, including evidence and generated analysis assets
+- HSTS is deliberately not forced because Sherloq is commonly deployed on LAN HTTP or behind a TLS-terminating reverse proxy
+- the analyst can explicitly purge an active session rather than waiting for TTL cleanup
+
+Security headers and Basic auth complement, rather than replace, normal network controls. For an internet-reachable deployment, use HTTPS and an appropriate reverse proxy/firewall policy.
 
 ## Host-safety and forensic-fidelity choices
 
@@ -178,16 +210,32 @@ Some desktop algorithms are expensive enough that blindly exposing them over HTT
 
 These limits are intended to preserve the evidentiary meaning of the analysis while keeping a hosted service responsive.
 
+## Browser extension architecture
+
+`app.js` remains the core browser workspace and `advanced-tools.js` is the compatibility layer for the large initial batch of ports. Newer browser features register through `plugin-runtime.js` rather than chaining additional replacements of global `run`, `upload`, `buildControls` or `renderResult` functions.
+
+The plugin runtime provides:
+- tool registration and automatic availability after upload
+- control-builder registration
+- custom tool runners
+- custom result renderers
+- post-upload and post-render hooks
+- a shared advanced-endpoint runner
+
+RGB/HSV plots, Stereogram, desktop-parity ELA, external handoffs and analysis-history recording use this runtime. It also routes normal image/gallery results through the original core renderer so structured data is displayed once rather than duplicated.
+
 ## Architecture
 
 ```text
 browser
   ├─ app.js                 core workspace
-  ├─ advanced-tools.js      advanced ports + model-service discovery
+  ├─ advanced-tools.js      initial advanced compatibility layer
+  ├─ plugin-runtime.js      extension registry / dispatch
   ├─ plots.js               RGB/HSV canvas plots
   ├─ utility-tools.js       stereogram utility
-  ├─ ela-tools.js           desktop-parity ELA UI override
+  ├─ ela-tools.js           desktop-parity ELA UI
   ├─ external-tools.js      explicit third-party handoffs
+  ├─ session-tools.js       explicit evidence purge
   └─ history.js             examination history + full export
           │
           ▼
@@ -197,7 +245,9 @@ FastAPI web/main.py
   ├─ web/inspection_api.py  browser-native inspection tools
   ├─ web/ela_api.py         desktop-parity ELA
   ├─ web/evidence_api.py    exact original-evidence download
+  ├─ web/session_api.py     explicit session purge
   ├─ web/history_api.py     bounded analysis history + full export
+  ├─ web/security.py        headers + optional Basic auth
   └─ web/model_services.py  bounded worker transport
           │
           ├──────── optional workers
@@ -217,6 +267,7 @@ headless analysis modules
 
 - `GET /api/health`
 - `POST /api/sessions`
+- `DELETE /api/sessions/{id}` — immediately purge the session and all session data
 - `POST /api/sessions/{id}/reference`
 - `GET /api/sessions/{id}/evidence` — exact uploaded bytes
 - `GET /api/sessions/{id}/tools/{tool}` — stable core tools
@@ -262,9 +313,12 @@ The test suite uses synthetic evidence and targeted fixtures to cover:
 - desktop-parity ELA modes
 - analysis history/full export and record-size bounds
 - exact-byte evidence download
+- explicit session purge
+- security headers and optional Basic-auth success/failure/misconfiguration behavior
+- plugin-runtime/static-module load ordering
 - clean unconfigured behavior for optional workers
 
-GitHub Actions compiles the backend/tests, verifies optional workers can import without eagerly loading their heavyweight ML runtimes, syntax-checks every browser module, runs pytest, validates Compose combinations and builds the lightweight base image.
+GitHub Actions compiles the backend/tests, verifies optional workers can import without eagerly loading their heavyweight ML runtimes, syntax-checks every browser module, checks that optional-worker Dockerfiles declare non-root users, runs pytest, validates Compose combinations, builds the lightweight base image, and verifies the built base container does not run as UID 0.
 
 ## Remaining parity / intentionally external items
 
