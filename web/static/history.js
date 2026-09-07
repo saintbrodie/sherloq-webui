@@ -37,11 +37,7 @@ async function recordAnalysisHistory(result) {
   }
 }
 
-const previousHistoryRenderResult = renderResult;
-renderResult = function renderResultAndRecord(result) {
-  previousHistoryRenderResult(result);
-  void recordAnalysisHistory(result);
-};
+SherloqPlugins.onRender((result) => recordAnalysisHistory(result));
 
 el.export.onclick = () => {
   if (state.session) {
