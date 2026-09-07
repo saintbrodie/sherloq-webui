@@ -6,7 +6,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from web.app import app
+from web.main import app
 
 
 TOOLS = [
@@ -85,6 +85,23 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert resampling.status_code == 200
     assert resampling.json()["type"] == "gallery"
     assert resampling.json()["data"]["Neighborhood"] == "3×3"
+
+    wavelet_noise = client.get(
+        f"/api/sessions/{session_id}/advanced/wavelet-noise?block_size=8"
+    )
+    assert wavelet_noise.status_code == 200, wavelet_noise.text
+    assert wavelet_noise.json()["type"] == "image"
+    assert wavelet_noise.json()["data"]["Wavelet"] == "db8"
+
+    ghosts = client.get(
+        f"/api/sessions/{session_id}/advanced/jpeg-ghosts"
+        "?qmin=70&qmax=80&qstep=5&shift_x=0&shift_y=0"
+    )
+    assert ghosts.status_code == 200, ghosts.text
+    ghost_payload = ghosts.json()
+    assert ghost_payload["type"] == "gallery"
+    assert len(ghost_payload["items"]) == 3
+    assert ghost_payload["data"]["Maps"] == 3
 
     no_reference = client.get(f"/api/sessions/{session_id}/tools/comparison")
     assert no_reference.status_code == 409
