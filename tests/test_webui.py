@@ -50,6 +50,7 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     import web.app as web_app
 
     monkeypatch.delenv("SHERLOQ_NOISEPRINT_URL", raising=False)
+    monkeypatch.delenv("SHERLOQ_MEDIAN_URL", raising=False)
     monkeypatch.delenv("SHERLOQ_TRUFOR_URL", raising=False)
     workdir = tmp_path / "sessions"
     workdir.mkdir()
@@ -67,6 +68,7 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     assert services.status_code == 200
     service_data = services.json()["services"]
     assert service_data["splicing"]["configured"] is False
+    assert service_data["median"]["configured"] is False
     assert service_data["trufor"]["configured"] is False
 
     with sample.open("rb") as handle:
@@ -113,6 +115,13 @@ def test_webui_smoke(tmp_path: Path, monkeypatch) -> None:
     splicing = client.get(f"/api/sessions/{session_id}/advanced/splicing")
     assert splicing.status_code == 503
     assert "SHERLOQ_NOISEPRINT_URL" in splicing.json()["detail"]
+
+    median = client.get(
+        f"/api/sessions/{session_id}/advanced/median"
+        "?min_variance=5&threshold=0.4&show_probability=false&speckle_filter=true"
+    )
+    assert median.status_code == 503
+    assert "SHERLOQ_MEDIAN_URL" in median.json()["detail"]
 
     trufor = client.get(f"/api/sessions/{session_id}/advanced/trufor")
     assert trufor.status_code == 503
