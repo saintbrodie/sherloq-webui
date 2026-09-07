@@ -5,6 +5,7 @@
 from . import analysis as analysis
 from . import advanced as advanced
 from . import jpeg_tools as jpeg_tools
+from . import resampling as resampling
 
 for _name in (
     "geolocation",
@@ -17,3 +18,4 @@ for _name in (
     setattr(analysis, _name, getattr(advanced, _name))
 
 analysis.embedded_thumbnail = jpeg_tools.embedded_thumbnail
+analysis.resampling_analysis = resampling.resampling_analysis
