@@ -92,6 +92,33 @@ def _bounded_color_histogram(image: np.ndarray) -> np.ndarray:
     return cv.normalize(histogram, None, alpha=1.0, norm_type=cv.NORM_L1)
 
 
+def _histogram_metrics(left: np.ndarray, right: np.ndarray) -> dict[str, float]:
+    """Return stable OpenCV histogram metrics, including degenerate perfect matches.
+
+    OpenCV's correlation metric can return -1 when both normalized sparse
+    histograms are identical but have zero variance. In that degenerate case the
+    semantic result is still a perfect match, so handle identical histograms
+    explicitly before calling compareHist.
+    """
+    if np.array_equal(left, right) or np.allclose(left, right, rtol=0.0, atol=1e-12):
+        return {
+            "correlation": 1.0,
+            "chi_square": 0.0,
+            "chi_square_alt": 0.0,
+            "intersection": float(np.sum(left)),
+            "hellinger": 0.0,
+            "kl_divergence": 0.0,
+        }
+    return {
+        "correlation": float(cv.compareHist(left, right, cv.HISTCMP_CORREL)),
+        "chi_square": float(cv.compareHist(left, right, cv.HISTCMP_CHISQR)),
+        "chi_square_alt": float(cv.compareHist(left, right, cv.HISTCMP_CHISQR_ALT)),
+        "intersection": float(cv.compareHist(left, right, cv.HISTCMP_INTERSECT)),
+        "hellinger": float(cv.compareHist(left, right, cv.HISTCMP_HELLINGER)),
+        "kl_divergence": float(cv.compareHist(left, right, cv.HISTCMP_KL_DIV)),
+    }
+
+
 def compare_images(
     evidence: np.ndarray,
     reference: np.ndarray,
@@ -126,6 +153,7 @@ def compare_images(
 
     hist_evidence = _bounded_color_histogram(evidence)
     hist_reference = _bounded_color_histogram(reference)
+    histogram = _histogram_metrics(hist_evidence, hist_reference)
     metrics: dict[str, Any] = {
         "RMSE": round(rmse, 6),
         "MAE": round(mae, 6),
@@ -137,24 +165,12 @@ def compare_images(
         "PFE (%)": round(pfe, 6),
         "RASE": round(_rase(evidence, reference), 6),
         "UQI": round(_uqi(gray_evidence, gray_reference), 8),
-        "Histogram correlation": round(
-            float(cv.compareHist(hist_evidence, hist_reference, cv.HISTCMP_CORREL)), 8
-        ),
-        "Histogram chi-square": round(
-            float(cv.compareHist(hist_evidence, hist_reference, cv.HISTCMP_CHISQR)), 8
-        ),
-        "Histogram chi-square alt": round(
-            float(cv.compareHist(hist_evidence, hist_reference, cv.HISTCMP_CHISQR_ALT)), 8
-        ),
-        "Histogram intersection": round(
-            float(cv.compareHist(hist_evidence, hist_reference, cv.HISTCMP_INTERSECT)), 8
-        ),
-        "Histogram Hellinger": round(
-            float(cv.compareHist(hist_evidence, hist_reference, cv.HISTCMP_HELLINGER)), 8
-        ),
-        "Histogram KL divergence": round(
-            float(cv.compareHist(hist_evidence, hist_reference, cv.HISTCMP_KL_DIV)), 8
-        ),
+        "Histogram correlation": round(histogram["correlation"], 8),
+        "Histogram chi-square": round(histogram["chi_square"], 8),
+        "Histogram chi-square alt": round(histogram["chi_square_alt"], 8),
+        "Histogram intersection": round(histogram["intersection"], 8),
+        "Histogram Hellinger": round(histogram["hellinger"], 8),
+        "Histogram KL divergence": round(histogram["kl_divergence"], 8),
         "Histogram bins": "32×32×32 (bounded WebUI color histogram)",
     }
 
