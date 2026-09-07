@@ -20,6 +20,15 @@ const advancedTools = [
   {
     group: "Inspection",
     tool: {
+      key: "magnifier",
+      label: "Enhancing Magnifier",
+      icon: "⌕",
+      controls: "magnifier",
+    },
+  },
+  {
+    group: "Inspection",
+    tool: {
       key: "space-conversion",
       label: "Space Conversion",
       icon: "◈",
@@ -101,6 +110,107 @@ const localAdvancedToolKeys = new Set(
 const advancedToolKeys = new Set(localAdvancedToolKeys);
 const configuredModelKeys = new Set();
 
+let magnifierRoi = null;
+let magnifierDrag = null;
+const magnifierOverlay = document.createElement("div");
+Object.assign(magnifierOverlay.style, {
+  position: "absolute",
+  display: "none",
+  pointerEvents: "none",
+  border: "1px solid #79e2b3",
+  background: "rgba(121,226,179,.14)",
+  boxShadow: "0 0 0 1px rgba(0,0,0,.65)",
+  zIndex: "6",
+});
+el.stage.style.position = "relative";
+el.stage.append(magnifierOverlay);
+
+function drawMagnifierRoi(roi = magnifierRoi) {
+  if (!roi || !state.session || state.active !== "magnifier") {
+    magnifierOverlay.style.display = "none";
+    return;
+  }
+  const width = el.source.clientWidth;
+  const height = el.source.clientHeight;
+  if (!width || !height) return;
+  const left = el.source.offsetLeft + (roi.x / state.session.width) * width;
+  const top = el.source.offsetTop + (roi.y / state.session.height) * height;
+  const displayWidth = (roi.width / state.session.width) * width;
+  const displayHeight = (roi.height / state.session.height) * height;
+  Object.assign(magnifierOverlay.style, {
+    display: "block",
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${displayWidth}px`,
+    height: `${displayHeight}px`,
+  });
+}
+
+function setMagnifierActive(active) {
+  el.stage.style.cursor = active ? "crosshair" : "";
+  if (active) drawMagnifierRoi();
+  else magnifierOverlay.style.display = "none";
+}
+
+function updateMagnifierInputs(roi) {
+  for (const [name, value] of Object.entries(roi)) {
+    const input = el.controls.querySelector(`input[name="${name}"]`);
+    if (input) input.value = value;
+  }
+}
+
+el.source.addEventListener("mousedown", (event) => {
+  if (state.active !== "magnifier" || !state.session || event.button !== 0) return;
+  const rect = el.source.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  event.preventDefault();
+  const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+  const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+  magnifierDrag = { rect, startX: x, startY: y, currentX: x, currentY: y };
+});
+
+document.addEventListener("mousemove", (event) => {
+  if (!magnifierDrag) return;
+  const { rect, startX, startY } = magnifierDrag;
+  const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+  const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+  magnifierDrag.currentX = x;
+  magnifierDrag.currentY = y;
+  Object.assign(magnifierOverlay.style, {
+    display: "block",
+    left: `${el.source.offsetLeft + Math.min(startX, x)}px`,
+    top: `${el.source.offsetTop + Math.min(startY, y)}px`,
+    width: `${Math.abs(x - startX)}px`,
+    height: `${Math.abs(y - startY)}px`,
+  });
+});
+
+document.addEventListener("mouseup", () => {
+  if (!magnifierDrag || !state.session) return;
+  const { rect, startX, startY, currentX, currentY } = magnifierDrag;
+  magnifierDrag = null;
+  if (Math.abs(currentX - startX) < 3 || Math.abs(currentY - startY) < 3) {
+    drawMagnifierRoi();
+    return;
+  }
+  const x1 = Math.floor((Math.min(startX, currentX) / rect.width) * state.session.width);
+  const y1 = Math.floor((Math.min(startY, currentY) / rect.height) * state.session.height);
+  const x2 = Math.ceil((Math.max(startX, currentX) / rect.width) * state.session.width);
+  const y2 = Math.ceil((Math.max(startY, currentY) / rect.height) * state.session.height);
+  magnifierRoi = {
+    x: Math.max(0, Math.min(x1, state.session.width - 2)),
+    y: Math.max(0, Math.min(y1, state.session.height - 2)),
+    width: Math.max(2, Math.min(x2 - x1, state.session.width - x1)),
+    height: Math.max(2, Math.min(y2 - y1, state.session.height - y1)),
+  };
+  updateMagnifierInputs(magnifierRoi);
+  drawMagnifierRoi();
+  run("magnifier", readControls());
+});
+
+window.addEventListener("resize", () => drawMagnifierRoi());
+el.stage.addEventListener("scroll", () => drawMagnifierRoi());
+
 for (const entry of advancedTools) {
   const group = groups.find((item) => item.label === entry.group);
   if (group && !group.tools.some((item) => item.key === entry.tool.key)) {
@@ -133,6 +243,9 @@ async function discoverModelServices() {
 
 const coreUpload = upload;
 upload = async function uploadWithAdvancedTools(file) {
+  magnifierRoi = null;
+  magnifierDrag = null;
+  magnifierOverlay.style.display = "none";
   await coreUpload(file);
   if (!state.session) return;
   for (const key of localAdvancedToolKeys) state.available.add(key);
@@ -165,6 +278,39 @@ buildControls = function buildAdvancedControls(item) {
     addNum("Threshold", "threshold", 255, 0, 255, 1, rerun);
     addSelect("Equalize", "equalize", ["none", "hist", "clahe-2", "clahe-5", "clahe-10", "clahe-20"], "none", rerun);
     addSelect("Invert", "invert", ["false", "true"], "false", rerun);
+    return;
+  }
+  if (item.controls === "magnifier") {
+    const roi = magnifierRoi || {
+      x: 0,
+      y: 0,
+      width: Math.min(256, state.session?.width || 256),
+      height: Math.min(256, state.session?.height || 256),
+    };
+    magnifierRoi = roi;
+    const rerunMagnifier = () => {
+      const values = readControls();
+      magnifierRoi = {
+        x: Number(values.x),
+        y: Number(values.y),
+        width: Number(values.width),
+        height: Number(values.height),
+      };
+      drawMagnifierRoi();
+      run(item.key, values);
+    };
+    addSelect("Mode", "mode", ["equalize", "auto-contrast"], "equalize", rerunMagnifier);
+    addNum("Centile %", "centile_percent", 20, 0, 100, 1, rerunMagnifier);
+    addSelect("By channel", "by_channel", ["false", "true"], "false", rerunMagnifier);
+    addNum("X", "x", roi.x, 0, Math.max(0, (state.session?.width || 1) - 1), 1, rerunMagnifier);
+    addNum("Y", "y", roi.y, 0, Math.max(0, (state.session?.height || 1) - 1), 1, rerunMagnifier);
+    addNum("Width", "width", roi.width, 2, state.session?.width || 256, 1, rerunMagnifier);
+    addNum("Height", "height", roi.height, 2, state.session?.height || 256, 1, rerunMagnifier);
+    const hint = document.createElement("span");
+    hint.textContent = "Drag on source to set ROI";
+    hint.style.cssText = "color:#79e2b3;font-size:10px;white-space:nowrap";
+    el.controls.append(hint);
+    drawMagnifierRoi();
     return;
   }
   if (item.controls === "space-conversion") {
@@ -240,6 +386,7 @@ renderResult = function renderResultWithDetails(result) {
 
 const coreRun = run;
 run = async function runWithAdvancedTools(key, params = null) {
+  setMagnifierActive(key === "magnifier");
   if (!advancedToolKeys.has(key)) {
     return coreRun(key, params);
   }
