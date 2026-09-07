@@ -5,23 +5,26 @@
 
 # Sherloq WebUI
 
-This fork is turning Sherloq's desktop forensic toolkit into a hostable browser application. The original PySide implementation is preserved in [`gui/`](gui/) while the browser application lives in [`web/`](web/).
+This fork turns Sherloq's PySide desktop forensic toolkit into a hostable browser application. The original desktop implementation remains under [`gui/`](gui/) as a reference; the browser application lives under [`web/`](web/).
 
-The goal is not to create an automatic "real/fake" detector. Sherloq remains an analyst's toolbox: individual techniques surface clues that need to be interpreted together and in context.
+Sherloq is an analyst toolbox, not an automatic "real/fake" detector. Individual techniques surface clues that should be interpreted together and in context.
 
-## What works in the WebUI now
+## Current status
 
-WebUI v0.3 includes a browser evidence workspace, a large set of headless ports from desktop Sherloq, camera RAW support, and optional isolated workers for heavyweight model-backed tools.
+WebUI v0.3 now covers nearly all desktop Sherloq tools that the upstream tool registry marks as functional or in active/debug state. Heavy model-backed tools are isolated behind optional workers, and desktop utilities that were already external websites remain explicit external handoffs rather than silently uploading evidence.
 
-### Workspace
+### Workspace and case handling
 - drag-and-drop and file-picker evidence loading
-- original-image viewer with zoom controls
+- zoomable original-image viewer
 - searchable forensic tool rail
-- backend-driven core tool availability plus modular advanced-tool registration
-- automatic discovery of configured model-backed forensic services
-- same-size secondary reference upload for comparison workflows
-- JSON report export
 - responsive desktop/tablet/mobile layout
+- same-size secondary reference upload for comparison workflows
+- automatic discovery of configured model-backed services
+- exact-byte original-evidence download
+- bounded per-session analysis history
+- JSON report export including the analyses, parameters, quantitative data and generated-asset references used during the browser session
+
+Analysis history is bounded to 200 entries per session and 256 KB per individual record. Generated images are referenced by session asset path rather than duplicated into the JSON report.
 
 ### Input formats
 - JPEG, PNG, TIFF, BMP and WebP through OpenCV/Pillow
@@ -30,49 +33,63 @@ WebUI v0.3 includes a browser evidence workspace, a large set of headless ports 
 - RAW rendering mirrors desktop Sherloq: camera white balance enabled and automatic brightening disabled
 - LibRaw metadata fallback so RAW evidence remains usable in Metadata and report export
 
-RAW detection is content-driven on the server. Uploaded evidence is stored under an internal session filename, so the decoder does not rely on the original extension being preserved.
+RAW detection is content-driven on the server. Uploaded evidence is stored under an internal session filename, so decoding does not rely on the original file extension.
+
+## Ported tools
 
 ### General and metadata
-- file digest with MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
-- EXIF / image metadata inspection
-- bounded File Header view with common raster/RAW signature recognition plus hex/ASCII bytes
-- embedded JPEG EXIF thumbnail extraction, full-size reconstruction, and source/thumbnail difference view
-- EXIF GPS extraction with decimal coordinates and an optional OpenStreetMap link
+- **Original Image** — persistent source viewer and exact-byte evidence download
+- **File Digest** — file information, MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
+- **File Header** — bounded hex/ASCII view with common raster/RAW signature recognition
+- **Metadata** — EXIF/image metadata plus LibRaw fallback
+- **Thumbnail Analysis** — embedded JPEG EXIF thumbnail extraction, reconstruction and source/thumbnail difference
+- **Geolocation** — local EXIF GPS extraction with decimal coordinates
 
 ### Inspection and color
-- RGB + luminance histograms
-- channel inspection
-- quick HSV/Lab channel gallery
-- full selectable **Space Conversion** matching desktop Sherloq: RGB, CMYK, four grayscale formulas, HSV, HLS, YCrCb, XYZ, Lab and Luv
-- non-destructive **Global Adjustments** with brightness, saturation, hue, gamma, shadows/highlights, tonal sweep, sharpening, histogram/CLAHE equalization, thresholding and inversion
-- per-channel pixel statistics
-- RGB principal-component projection with explained variance
-- same-size reference-image comparison with normalized difference, SSIM map, RMSE, MAE, PSNR, SSIM and histogram correlation
+- **Enhancing Magnifier** — drag-select an ROI on the source image, then apply desktop-style histogram equalization or percentile auto-contrast to that region only
+- **Channel Histogram** — RGB + luminance histogram
+- **Channel Inspection** — RGB/luminance channel views
+- **Global Adjustments** — brightness, saturation, hue, gamma, shadows/highlights, tonal sweep, sharpening, histogram/CLAHE equalization, thresholding and inversion using desktop Sherloq's processing order; source evidence is never overwritten
+- **Reference Comparison** — normalized absolute difference, signed difference and SSIM map plus RMSE, MAE, PSNR, SSIM, SAM, ERGAS, mean bias, PFE, RASE, UQI and bounded 3D-color histogram comparison metrics
+- **RGB / HSV Plots** — browser-native 2D and rotatable 3D scatter plots with deterministic bounded sampling
+- **Space Conversion** — RGB, CMYK, four grayscale formulas, HSV, HLS, YCrCb, XYZ, Lab and Luv with selectable channel and summary statistics
+- **PCA Projection** — principal RGB color components with explained variance
+- **Pixel Statistics** — per-channel statistics
 
 ### Detail and noise
-- luminance gradient map
-- echo / high-frequency edge map
-- simple 2D frequency spectrum
-- full **Frequency Split** with low-frequency, high-frequency, DFT magnitude and DFT phase views
-- wavelet threshold reconstruction with selectable wavelet, threshold, level and mode
-- **Signal Separation** with median, Gaussian, box, bilateral and non-local denoising plus residual/denoised and grayscale modes
-- median-filter noise residual analysis
-- **Min/Max Deviation** with luminance/R/G/B/RGB-norm modes and optional block filtering
-- Mahdian/Saic local wavelet-noise blocking map using db8 diagonal coefficients
-- grayscale bit-plane decomposition
+- **Luminance Gradient**
+- **Echo Edge Filter**
+- **Wavelet Threshold** — selectable wavelet, level, threshold and mode
+- **Frequency Spectrum** — quick 2D Fourier spectrum
+- **Frequency Split** — low/high-frequency images plus DFT magnitude and DFT phase views
+- **Signal Separation** — median, Gaussian, box, bilateral and non-local denoising with residual/denoised and grayscale modes
+- **Noise Residual** — lightweight median residual view
+- **Min/Max Deviation** — luminance/R/G/B/RGB-norm modes with marker colors and optional block filtering
+- **Bit Planes**
+- **Wavelet Noise Blocking** — Mahdian/Saic db8 local-noise estimate
 
 ### JPEG and tampering
-- JPEG quantization-table quality estimation
-- error level analysis with interactive JPEG quality and gain controls
-- Farid-style JPEG ghost maps with quality sweep and 8×8 lattice-offset controls
-- contrast / clipping statistics
-- copy-move candidate detection using ORB, BRISK or AKAZE local features
-- Popescu/Farid interpolation probability analysis with Fourier periodicity visualization for resampling traces
-- optional Noiseprint composite-splicing heatmap through an isolated model worker
-- optional XGBoost median-filter detection through an isolated model worker
-- optional TruFor endpoint through the same external-worker contract
+- **JPEG Quality Estimation** — quantization-table estimate
+- **Error Level Analysis** — desktop-parity OpenCV JPEG recompression with Q75/scale-50/contrast-20 defaults, square-root or linear difference modes and optional grayscale; the older core endpoint remains available for API compatibility
+- **JPEG Ghost Maps** — Farid-style recompression-quality sweep and 8×8 lattice offsets
+- **Contrast Statistics**
+- **Copy-Move Forgery** — ORB, BRISK or AKAZE local-feature self matching
+- **Image Resampling** — Popescu/Farid interpolation probability plus Fourier periodicity analysis
+- **Composite Splicing** — optional Noiseprint worker
+- **Median Filtering** — optional XGBoost worker preserving the legacy classifier pipeline and controls
+- **TruFor** — compatible external-worker endpoint
 
-The browser enables model-backed buttons only when their service is configured. Tools that are neither locally ported nor configured remain unavailable rather than silently substituting a different analysis.
+### Various
+- **Stereogram Decoder** — repeating-pattern detection with pattern, silhouette, optical-flow depth and shaded views
+
+## External handoffs
+
+Desktop Sherloq's Hex Editor and Similarity Search are themselves embedded external websites rather than local analysis algorithms. The WebUI keeps that boundary explicit.
+
+- **Hex Editor** opens HexEd.it and provides a separate exact-byte evidence download. Sherloq does not send the evidence automatically.
+- **Similarity Search** offers explicit links to TinEye, Google Search by image and Bing Visual Search. The image is never uploaded automatically; the analyst decides whether to provide it to a third party.
+
+This avoids leaking evidence merely because a tool was clicked.
 
 ## Quick start with Docker
 
@@ -84,11 +101,9 @@ docker compose up --build
 
 Open `http://localhost:8000`.
 
-The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, and removes idle analysis sessions after 12 hours. It includes the lightweight RAW decoder but does **not** install TensorFlow or XGBoost or start any model-backed worker.
+The default Compose configuration exposes Sherloq on port `8000`, limits uploads to 40 MB, removes idle sessions after 12 hours, and includes the lightweight RAW decoder. It does **not** install TensorFlow or XGBoost or start any model-backed worker.
 
-### Enable the bundled Noiseprint worker
-
-Noiseprint is deliberately isolated in a second container because the legacy implementation uses TensorFlow-compatible checkpoints plus SciPy/scikit-learn post-processing.
+### Enable Noiseprint
 
 ```bash
 docker compose \
@@ -97,13 +112,11 @@ docker compose \
   up --build
 ```
 
-The main WebUI discovers `SHERLOQ_NOISEPRINT_URL=http://noiseprint:8101` automatically and enables **Composite Splicing**. The worker is internal to the Compose network; port `8101` is not published to the host.
+This configures `SHERLOQ_NOISEPRINT_URL=http://noiseprint:8101` and enables **Composite Splicing**. The worker remains internal to the Compose network.
 
-Noiseprint code and model assets included in the legacy Sherloq tree carry the GRIP-UNINA **nonprofit-use** license terms. Review those terms before enabling or redistributing this optional component.
+The legacy Noiseprint code/model assets included with Sherloq carry GRIP-UNINA **nonprofit-use** license terms. Review those terms before enabling or redistributing this optional component.
 
-### Enable the bundled median-filter worker
-
-The desktop median-filter detector uses a roughly 28 MB XGBoost model plus a 64×64 block feature pipeline. It is also kept out of the normal WebUI image.
+### Enable median-filter detection
 
 ```bash
 docker compose \
@@ -112,30 +125,15 @@ docker compose \
   up --build
 ```
 
-This configures `SHERLOQ_MEDIAN_URL=http://median-filter:8103` and enables **Median-Filter Detection** with minimum-variance, probability-threshold, probability-map and speckle-filter controls.
+This configures `SHERLOQ_MEDIAN_URL=http://median-filter:8103` and enables **Median-Filter Detection**. Noiseprint and median filtering can be enabled together by supplying all three Compose files.
 
-Noiseprint and median detection can be enabled together by supplying all three Compose files.
-
-### Connect an external TruFor worker
-
-TruFor remains external because the legacy desktop integration itself expects a separately obtained TruFor repository and model weights. Point Sherloq at a compatible worker with:
+### Connect TruFor or another compatible worker
 
 ```bash
 export SHERLOQ_TRUFOR_URL=http://your-trufor-worker:8102
 ```
 
-A compatible model worker exposes `POST /analyze`, accepts the evidence as multipart field `file`, and returns JSON containing:
-
-```json
-{
-  "title": "Tool name",
-  "description": "Optional explanation",
-  "data": {"score": 0.5},
-  "image_base64": "<base64-encoded PNG or other browser-readable image>"
-}
-```
-
-Noiseprint and median detection use the same bounded worker transport, allowing heavyweight or GPU-specific forensic engines to stay outside the normal WebUI process.
+A compatible worker exposes `POST /analyze`, accepts evidence as multipart field `file`, and returns JSON containing an analysis image plus optional title, description and structured data. The same bounded transport contract is used by the bundled Noiseprint and median workers.
 
 ## Run directly with Python
 
@@ -155,101 +153,133 @@ Then open `http://localhost:8000`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `SHERLOQ_WORKDIR` | system temp directory | Temporary uploaded images and generated analysis assets |
-| `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum upload size in megabytes |
+| `SHERLOQ_WORKDIR` | system temp directory | Temporary evidence, session metadata and generated assets |
+| `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum evidence/reference upload size |
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
-| `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible model worker base URL |
-| `SHERLOQ_MEDIAN_URL` | unset | Median-filter worker base URL |
-| `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible model worker base URL |
-| `SHERLOQ_MODEL_TIMEOUT_SECONDS` | `180` | Timeout for model-worker analysis requests |
-| `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum JSON/image response accepted from a model worker |
+| `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible worker URL |
+| `SHERLOQ_MEDIAN_URL` | unset | Median-filter worker URL |
+| `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible worker URL |
+| `SHERLOQ_MODEL_TIMEOUT_SECONDS` | `180` | Model-worker timeout |
+| `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum accepted model-worker JSON/image response |
 
-Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
+Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local. The backend does not automatically contact mapping, reverse-search or other third-party services.
 
-Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Frequency Split and non-local Signal Separation likewise have host-side size/performance guards. JPEG ghost analysis has an interactive-size guard because a quality sweep repeatedly recompresses the full evidence image.
+## Host-safety and forensic-fidelity choices
+
+Some desktop algorithms are expensive enough that blindly exposing them over HTTP would be unsafe or would contaminate the signal being measured.
+
+- Resampling refuses oversized evidence instead of downscaling it and introducing interpolation artifacts.
+- Frequency Split caps very large Gaussian kernels and guards oversized jobs.
+- Non-local Signal Separation has a full-frame size guard.
+- JPEG Ghost sweeps are bounded because they recompress the full evidence repeatedly.
+- RGB/HSV plotting uses deterministic bounded sampling rather than sending every pixel to the browser.
+- Extended comparison uses a bounded 32×32×32 color histogram instead of allocating the desktop tool's potentially huge 256³ color histogram.
+- Analysis-history records are size/count bounded.
+
+These limits are intended to preserve the evidentiary meaning of the analysis while keeping a hosted service responsive.
 
 ## Architecture
 
 ```text
 browser
-  ├─ web/static/index.html
-  ├─ web/static/styles.css
-  ├─ web/static/app.js              core workspace
-  └─ web/static/advanced-tools.js   modular tools + worker discovery
+  ├─ app.js                 core workspace
+  ├─ advanced-tools.js      advanced ports + model-service discovery
+  ├─ plots.js               RGB/HSV canvas plots
+  ├─ utility-tools.js       stereogram utility
+  ├─ ela-tools.js           desktop-parity ELA UI override
+  ├─ external-tools.js      explicit third-party handoffs
+  └─ history.js             examination history + full export
           │
           ▼
-FastAPI  web/main.py
+FastAPI web/main.py
+  ├─ web/app.py             stable core sessions/tool API
+  ├─ web/advanced_api.py    advanced forensics + worker proxies
+  ├─ web/inspection_api.py  browser-native inspection tools
+  ├─ web/ela_api.py         desktop-parity ELA
+  ├─ web/evidence_api.py    exact original-evidence download
+  ├─ web/history_api.py     bounded analysis history + full export
+  └─ web/model_services.py  bounded worker transport
           │
-          ├─ web/app.py             core sessions + core tool API
-          ├─ web/advanced_api.py    forensic/model proxy routes
-          ├─ web/inspection_api.py  browser inspection utilities
-          └─ web/model_services.py  bounded worker transport contract
-                    │
-                    ├──────────── optional HTTP workers
-                    │               ├─ bundled Noiseprint worker
-                    │               ├─ bundled median-filter worker
-                    │               └─ external TruFor/other workers
-                    ▼
+          ├──────── optional workers
+          │          ├─ Noiseprint
+          │          ├─ median-filter XGBoost
+          │          └─ external TruFor/other workers
+          ▼
 headless analysis modules
   ├─ OpenCV / NumPy / Pillow
   ├─ PyWavelets
   └─ rawpy / LibRaw
 ```
 
-This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports put reusable computation in headless modules and expose only structured results through the API. The browser remains responsible for controls, rendering, and interaction.
+`web/main.py` is the deployment entry point. Heavy ML runtimes stay outside the normal CPU-friendly process.
 
-`web/main.py` is the deployment entry point. Heavyweight model services communicate over a small HTTP contract, so TensorFlow/XGBoost/PyTorch dependencies and GPU requirements stay outside the normal CPU-friendly WebUI process.
+## API highlights
 
-## API
+- `GET /api/health`
+- `POST /api/sessions`
+- `POST /api/sessions/{id}/reference`
+- `GET /api/sessions/{id}/evidence` — exact uploaded bytes
+- `GET /api/sessions/{id}/tools/{tool}` — stable core tools
+- `GET /api/sessions/{id}/advanced/ela`
+- `GET /api/sessions/{id}/advanced/magnifier`
+- `GET /api/sessions/{id}/advanced/space-conversion`
+- `GET /api/sessions/{id}/advanced/rgb-hsv-plots`
+- `GET /api/sessions/{id}/advanced/stereogram`
+- `GET /api/sessions/{id}/advanced/frequency-split`
+- `GET /api/sessions/{id}/advanced/signal-separation`
+- `GET /api/sessions/{id}/advanced/minmax`
+- `GET /api/sessions/{id}/advanced/wavelet-noise`
+- `GET /api/sessions/{id}/advanced/jpeg-ghosts`
+- `GET /api/sessions/{id}/advanced/splicing`
+- `GET /api/sessions/{id}/advanced/median`
+- `GET /api/sessions/{id}/advanced/trufor`
+- `POST /api/sessions/{id}/history`
+- `GET /api/sessions/{id}/history`
+- `GET /api/sessions/{id}/export-full` — report including browser examination history
+- `GET /api/sessions/{id}/assets/{file}`
 
-Useful endpoints include:
-
-- `GET /api/health` — service health check
-- `GET /api/model-services` — report whether optional model services are configured
-- `POST /api/sessions` — upload an evidence image and create an analysis session
-- `POST /api/sessions/{id}/reference` — upload a same-size comparison reference
-- `GET /api/sessions/{id}/tools/{tool}` — run a core forensic tool
-- `GET /api/sessions/{id}/advanced/header` — inspect a bounded raw file header
-- `GET /api/sessions/{id}/advanced/adjustments` — non-destructive adjustment rendering
-- `GET /api/sessions/{id}/advanced/space-conversion` — selectable desktop-compatible color-space channel
-- `GET /api/sessions/{id}/advanced/frequency-split` — low/high frequency + DFT views
-- `GET /api/sessions/{id}/advanced/signal-separation` — configurable denoise/residual separation
-- `GET /api/sessions/{id}/advanced/minmax` — min/max deviation analysis
-- `GET /api/sessions/{id}/advanced/wavelet-noise` — local wavelet-noise blocking analysis
-- `GET /api/sessions/{id}/advanced/jpeg-ghosts` — JPEG ghost quality sweep
-- `GET /api/sessions/{id}/advanced/splicing` — proxy to configured Noiseprint service
-- `GET /api/sessions/{id}/advanced/median` — proxy to configured median-filter service
-- `GET /api/sessions/{id}/advanced/trufor` — proxy to configured TruFor service
-- `GET /api/sessions/{id}/assets/{file}` — retrieve generated visual output
-- `GET /api/sessions/{id}/export` — download a JSON report
-
-FastAPI also provides its interactive API documentation at `/docs`.
+FastAPI also provides interactive API documentation at `/docs`.
 
 ## Validation
 
-The smoke suite creates synthetic evidence, uploads it through the API, and exercises every exposed core single-image tool plus the advanced Header, Global Adjustments, Min/Max, Frequency Split, Signal Separation, wavelet-noise and JPEG-ghost paths. It also covers the complete reference-comparison workflow, rejects mismatched reference dimensions, and verifies clean handling of a JPEG without an embedded thumbnail.
+The test suite uses synthetic evidence and targeted fixtures to cover:
+- all exposed core single-image tools
+- reference upload/comparison and dimension rejection
+- extended comparison perfect-match and modified-image behavior
+- RAW decoder fallback and metadata behavior
+- embedded-thumbnail no-thumbnail handling
+- Header inspection
+- Space Conversion and invalid channel rejection
+- Global Adjustments
+- Enhancing Magnifier equalization/auto-contrast
+- RGB/HSV plot data contracts
+- Min/Max Deviation
+- Frequency Split
+- Signal Separation
+- Wavelet Noise Blocking
+- JPEG Ghost Maps
+- Stereogram success/failure paths
+- desktop-parity ELA modes
+- analysis history/full export and record-size bounds
+- exact-byte evidence download
+- clean unconfigured behavior for optional workers
 
-Space Conversion has dedicated API tests covering desktop-compatible CMYK and grayscale selections plus invalid space/channel rejection.
+GitHub Actions compiles the backend/tests, verifies optional workers can import without eagerly loading their heavyweight ML runtimes, syntax-checks every browser module, runs pytest, validates Compose combinations and builds the lightweight base image.
 
-RAW decoding has a boundary-level regression test that verifies the desktop-compatible camera-white-balance/no-auto-bright settings, BGR conversion, LibRaw metadata fallback and graceful non-JPEG quality handling without requiring a proprietary camera sample in the repository.
+## Remaining parity / intentionally external items
 
-The suite also verifies that model-backed services are disabled cleanly when no worker is configured. GitHub Actions compiles all Python modules and tests, imports optional workers without loading their heavyweight ML runtimes, syntax-checks browser scripts, validates the base and worker Compose configurations, runs pytest, and builds the lightweight base Docker image.
+At this point the main remaining work is not another broad wave of lightweight tool ports:
 
-## Port status / next targets
+1. package and validate a TruFor worker once its separately distributed repository/model weights are available
+2. improve Header Structure toward ExifTool-level container parsing if that can be done without making ExifTool a mandatory base dependency
+3. broaden parity testing against real-world RAW/JPEG evidence sets
+4. optionally add upstream-unimplemented ideas such as PRNU, illuminant mapping, dead/hot-pixel analysis or multiple-compression ML as **new** capabilities rather than claiming desktop parity
 
-The largest remaining parity targets are now:
-
-1. a packaged/validated TruFor worker once its separately distributed repository and weights are supplied
-2. Enhancing Magnifier as a browser-native inspection tool
-3. richer comparison metrics and side-by-side interaction where they provide real analyst value
-4. remaining lightweight legacy utilities such as RGB/HSV plots and stereogram decoding
-5. broader parity testing against real-world RAW/JPEG evidence sets
-
-Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
+The desktop tool registry itself marks PRNU Identification, Multiple Compression, Illuminant Map and Dead/Hot Pixels as unimplemented. Those are therefore not considered missing WebUI ports.
 
 ## Legacy desktop application
 
-The original PySide application is still available under [`gui/`](gui/):
+The original PySide application remains under [`gui/`](gui/):
 
 ```bash
 cd gui
@@ -257,12 +287,10 @@ pip install -r requirements.txt
 python sherloq.py
 ```
 
-The desktop application still has some broader utility coverage and remains useful as a reference while algorithms are moved into headless modules.
-
 ## Project philosophy
 
-Forensic image analysis is not a single-score problem. Compression, resizing, denoising, social-media processing, camera pipelines, screenshots, AI generation, and ordinary editing can all produce artifacts that resemble manipulation indicators. Sherloq is designed to expose multiple complementary measurements so an analyst can inspect the evidence instead of trusting a proprietary verdict.
+Forensic image analysis is not a single-score problem. Compression, resizing, denoising, social-media processing, camera pipelines, screenshots, AI generation and ordinary editing can all produce artifacts resembling manipulation indicators. Sherloq exposes multiple complementary measurements so an analyst can inspect the evidence instead of trusting one opaque verdict.
 
 ## License and attribution
 
-This fork retains Sherloq's existing license and the original project's history. Optional third-party forensic components retain their own upstream licenses; in particular, the included legacy Noiseprint code/model assets state nonprofit-use terms. The browser port is intended to preserve the open, inspectable nature of the original toolkit while making it easier to host and use across machines.
+This fork retains Sherloq's existing license and original project history. Optional third-party forensic components retain their own upstream licenses; in particular, the included legacy Noiseprint code/model assets state nonprofit-use terms. The browser port aims to preserve Sherloq's open, inspectable nature while making it practical to host and use across machines.
