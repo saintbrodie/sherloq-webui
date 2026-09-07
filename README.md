@@ -5,16 +5,16 @@
 
 # Sherloq WebUI
 
-This fork is turning Sherloq's desktop forensic toolkit into a hostable browser application. The original PySide desktop implementation is preserved in [`gui/`](gui/) while the browser application lives in [`web/`](web/).
+This fork is turning Sherloq's desktop forensic toolkit into a hostable browser application. The original PySide implementation is preserved in [`gui/`](gui/) while the browser application lives in [`web/`](web/).
 
 The goal is not to create an automatic "real/fake" detector. Sherloq remains an analyst's toolbox: individual techniques surface clues that need to be interpreted together and in context.
 
 ## What works in the WebUI now
 
-WebUI v0.3 includes:
+WebUI v0.3 includes a browser evidence workspace, a large set of headless ports from desktop Sherloq, camera RAW support, and optional isolated workers for heavyweight model-backed tools.
 
 ### Workspace
-- drag-and-drop image upload and an evidence workspace
+- drag-and-drop and file-picker evidence loading
 - original-image viewer with zoom controls
 - searchable forensic tool rail
 - backend-driven core tool availability plus modular advanced-tool registration
@@ -28,20 +28,23 @@ WebUI v0.3 includes:
 - camera RAW fallback through `rawpy` / LibRaw
 - common RAW picker extensions including NEF, RAF, CR2/CR3, DNG, ARW, DCR, MRW, PEF, CRW, SR2, ORF, RW2 and RAW
 - RAW rendering mirrors desktop Sherloq: camera white balance enabled and automatic brightening disabled
+- LibRaw metadata fallback so RAW evidence remains usable in Metadata and report export
 
 RAW detection is content-driven on the server. Uploaded evidence is stored under an internal session filename, so the decoder does not rely on the original extension being preserved.
 
 ### General and metadata
 - file digest with MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
 - EXIF / image metadata inspection
-- basic LibRaw metadata fallback for RAW evidence
+- bounded File Header view with common raster/RAW signature recognition plus hex/ASCII bytes
 - embedded JPEG EXIF thumbnail extraction, full-size reconstruction, and source/thumbnail difference view
 - EXIF GPS extraction with decimal coordinates and an optional OpenStreetMap link
 
 ### Inspection and color
 - RGB + luminance histograms
 - channel inspection
-- HSV and Lab channel views
+- quick HSV/Lab channel gallery
+- full selectable **Space Conversion** matching desktop Sherloq: RGB, CMYK, four grayscale formulas, HSV, HLS, YCrCb, XYZ, Lab and Luv
+- non-destructive **Global Adjustments** with brightness, saturation, hue, gamma, shadows/highlights, tonal sweep, sharpening, histogram/CLAHE equalization, thresholding and inversion
 - per-channel pixel statistics
 - RGB principal-component projection with explained variance
 - same-size reference-image comparison with normalized difference, SSIM map, RMSE, MAE, PSNR, SSIM and histogram correlation
@@ -49,9 +52,12 @@ RAW detection is content-driven on the server. Uploaded evidence is stored under
 ### Detail and noise
 - luminance gradient map
 - echo / high-frequency edge map
-- 2D frequency spectrum
+- simple 2D frequency spectrum
+- full **Frequency Split** with low-frequency, high-frequency, DFT magnitude and DFT phase views
 - wavelet threshold reconstruction with selectable wavelet, threshold, level and mode
+- **Signal Separation** with median, Gaussian, box, bilateral and non-local denoising plus residual/denoised and grayscale modes
 - median-filter noise residual analysis
+- **Min/Max Deviation** with luminance/R/G/B/RGB-norm modes and optional block filtering
 - Mahdian/Saic local wavelet-noise blocking map using db8 diagonal coefficients
 - grayscale bit-plane decomposition
 
@@ -160,7 +166,7 @@ Then open `http://localhost:8000`.
 
 Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
 
-Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Large inputs should be cropped to a suspected region before running that tool. JPEG ghost analysis likewise has an interactive-size guard because a quality sweep repeatedly recompresses the full evidence image.
+Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Frequency Split and non-local Signal Separation likewise have host-side size/performance guards. JPEG ghost analysis has an interactive-size guard because a quality sweep repeatedly recompresses the full evidence image.
 
 ## Architecture
 
@@ -169,13 +175,14 @@ browser
   ├─ web/static/index.html
   ├─ web/static/styles.css
   ├─ web/static/app.js              core workspace
-  └─ web/static/advanced-tools.js   advanced + model-service discovery
+  └─ web/static/advanced-tools.js   modular tools + worker discovery
           │
           ▼
 FastAPI  web/main.py
           │
           ├─ web/app.py             core sessions + core tool API
-          ├─ web/advanced_api.py    advanced forensic/model proxy routes
+          ├─ web/advanced_api.py    forensic/model proxy routes
+          ├─ web/inspection_api.py  browser inspection utilities
           └─ web/model_services.py  bounded worker transport contract
                     │
                     ├──────────── optional HTTP workers
@@ -183,66 +190,66 @@ FastAPI  web/main.py
                     │               ├─ bundled median-filter worker
                     │               └─ external TruFor/other workers
                     ▼
-headless analysis
-  ├─ web/analysis.py       core tools + OpenCV/LibRaw input decoding
-  ├─ web/advanced.py       comparison, PCA, wavelets, copy-move, GPS
-  ├─ web/jpeg_tools.py     JPEG EXIF thumbnail parsing and comparison
-  ├─ web/resampling.py     interpolation probability + Fourier analysis
-  └─ web/forensics_ext.py  JPEG ghosts + wavelet noise blocking
-          │
-          ├─ OpenCV
-          ├─ NumPy
-          ├─ Pillow
-          ├─ PyWavelets
-          └─ rawpy / LibRaw
+headless analysis modules
+  ├─ OpenCV / NumPy / Pillow
+  ├─ PyWavelets
+  └─ rawpy / LibRaw
 ```
 
-This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports should put reusable computation in a headless module and expose only structured results through the API. The browser should remain responsible for controls, rendering, and interaction.
+This split is intentional. In the desktop code many algorithms are computed directly inside `QWidget` classes, which makes them difficult to reuse outside Qt. New web ports put reusable computation in headless modules and expose only structured results through the API. The browser remains responsible for controls, rendering, and interaction.
 
 `web/main.py` is the deployment entry point. Heavyweight model services communicate over a small HTTP contract, so TensorFlow/XGBoost/PyTorch dependencies and GPU requirements stay outside the normal CPU-friendly WebUI process.
 
 ## API
 
-Useful endpoints:
+Useful endpoints include:
 
 - `GET /api/health` — service health check
 - `GET /api/model-services` — report whether optional model services are configured
 - `POST /api/sessions` — upload an evidence image and create an analysis session
 - `POST /api/sessions/{id}/reference` — upload a same-size comparison reference
 - `GET /api/sessions/{id}/tools/{tool}` — run a core forensic tool
-- `GET /api/sessions/{id}/advanced/wavelet-noise` — run local wavelet-noise blocking analysis
-- `GET /api/sessions/{id}/advanced/jpeg-ghosts` — run the JPEG ghost quality sweep
+- `GET /api/sessions/{id}/advanced/header` — inspect a bounded raw file header
+- `GET /api/sessions/{id}/advanced/adjustments` — non-destructive adjustment rendering
+- `GET /api/sessions/{id}/advanced/space-conversion` — selectable desktop-compatible color-space channel
+- `GET /api/sessions/{id}/advanced/frequency-split` — low/high frequency + DFT views
+- `GET /api/sessions/{id}/advanced/signal-separation` — configurable denoise/residual separation
+- `GET /api/sessions/{id}/advanced/minmax` — min/max deviation analysis
+- `GET /api/sessions/{id}/advanced/wavelet-noise` — local wavelet-noise blocking analysis
+- `GET /api/sessions/{id}/advanced/jpeg-ghosts` — JPEG ghost quality sweep
 - `GET /api/sessions/{id}/advanced/splicing` — proxy to configured Noiseprint service
 - `GET /api/sessions/{id}/advanced/median` — proxy to configured median-filter service
 - `GET /api/sessions/{id}/advanced/trufor` — proxy to configured TruFor service
 - `GET /api/sessions/{id}/assets/{file}` — retrieve generated visual output
 - `GET /api/sessions/{id}/export` — download a JSON report
 
-FastAPI also provides its normal interactive API documentation at `/docs`.
+FastAPI also provides its interactive API documentation at `/docs`.
 
 ## Validation
 
-The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed core single-image tool, including the resampling probability/Fourier path. It also runs wavelet-noise blocking and a reduced JPEG-ghost quality sweep, verifies clean handling of a JPEG without an embedded thumbnail, exercises the complete reference-comparison workflow, and rejects mismatched reference dimensions rather than silently resizing them.
+The smoke suite creates synthetic evidence, uploads it through the API, and exercises every exposed core single-image tool plus the advanced Header, Global Adjustments, Min/Max, Frequency Split, Signal Separation, wavelet-noise and JPEG-ghost paths. It also covers the complete reference-comparison workflow, rejects mismatched reference dimensions, and verifies clean handling of a JPEG without an embedded thumbnail.
+
+Space Conversion has dedicated API tests covering desktop-compatible CMYK and grayscale selections plus invalid space/channel rejection.
 
 RAW decoding has a boundary-level regression test that verifies the desktop-compatible camera-white-balance/no-auto-bright settings, BGR conversion, LibRaw metadata fallback and graceful non-JPEG quality handling without requiring a proprietary camera sample in the repository.
 
-The suite also verifies that model-backed services are disabled cleanly when no worker is configured. GitHub Actions compiles all Python modules and tests, imports optional workers without loading their heavyweight ML runtimes, syntax-checks both browser scripts, validates the base and worker Compose configurations, runs pytest, and builds the lightweight base Docker image.
+The suite also verifies that model-backed services are disabled cleanly when no worker is configured. GitHub Actions compiles all Python modules and tests, imports optional workers without loading their heavyweight ML runtimes, syntax-checks browser scripts, validates the base and worker Compose configurations, runs pytest, and builds the lightweight base Docker image.
 
 ## Port status / next targets
 
 The largest remaining parity targets are now:
 
 1. a packaged/validated TruFor worker once its separately distributed repository and weights are supplied
-2. richer file-header / container inspection where it can be done without bundling ExifTool
-3. additional desktop comparison metrics where they can be implemented without large native binaries
-4. interactive adjustment and magnifier utilities that are genuinely useful in a browser workflow
-5. further parity testing against real-world RAW/JPEG evidence sets
+2. Enhancing Magnifier as a browser-native inspection tool
+3. richer comparison metrics and side-by-side interaction where they provide real analyst value
+4. remaining lightweight legacy utilities such as RGB/HSV plots and stereogram decoding
+5. broader parity testing against real-world RAW/JPEG evidence sets
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
 ## Legacy desktop application
 
-The original PySide application is still available under [`gui/`](gui/). To run it, follow the legacy dependency file and launch script there:
+The original PySide application is still available under [`gui/`](gui/):
 
 ```bash
 cd gui
