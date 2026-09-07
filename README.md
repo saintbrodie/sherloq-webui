@@ -48,6 +48,7 @@ WebUI v0.2 includes:
 - error level analysis with interactive JPEG quality and gain controls
 - contrast / clipping statistics
 - copy-move candidate detection using ORB, BRISK or AKAZE local features
+- Popescu/Farid interpolation probability analysis with Fourier periodicity visualization for resampling traces
 
 The web UI deliberately marks desktop tools that have not been ported yet instead of silently substituting a different analysis.
 
@@ -87,9 +88,9 @@ Then open `http://localhost:8000`.
 
 Uploads are processed by the machine hosting Sherloq WebUI. GPS extraction is local; the backend does not automatically send coordinates to a mapping service. Embedded JPEG thumbnails are parsed directly from the EXIF APP1/TIFF structure, so the base container does not need ExifTool.
 
-## Architecture
+Resampling analysis deliberately does not downscale oversized evidence because rescaling would introduce interpolation artifacts into the evidence being measured. Large images should be cropped to a suspected region before running that tool.
 
-The browser port separates Sherloq's algorithms from its old Qt widgets:
+## Architecture
 
 ```text
 browser
@@ -107,7 +108,8 @@ FastAPI  web/app.py
 headless analysis
   ├─ web/analysis.py     core / lightweight tools
   ├─ web/advanced.py     comparison, PCA, wavelets, copy-move, GPS
-  └─ web/jpeg_tools.py   JPEG EXIF thumbnail parsing and comparison
+  ├─ web/jpeg_tools.py   JPEG EXIF thumbnail parsing and comparison
+  └─ web/resampling.py   interpolation probability + Fourier analysis
           │
           ├─ OpenCV
           ├─ NumPy
@@ -132,7 +134,7 @@ FastAPI also provides its normal interactive API documentation at `/docs`.
 
 ## Validation
 
-The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed single-image tool. It also verifies clean handling of a JPEG without an embedded thumbnail, the complete reference-comparison workflow, and rejection of mismatched reference dimensions rather than silently resizing them.
+The smoke suite creates synthetic evidence, uploads it through the API, and exercises every currently exposed single-image tool, including the resampling probability/Fourier path. It also verifies clean handling of a JPEG without an embedded thumbnail, the complete reference-comparison workflow, and rejection of mismatched reference dimensions rather than silently resizing them.
 
 GitHub Actions runs Python compilation, pytest, and a Docker image build for the WebUI branch.
 
@@ -140,15 +142,14 @@ GitHub Actions runs Python compilation, pytest, and a Docker image build for the
 
 The desktop project still has substantially broader coverage. Good next ports are:
 
-1. image resampling analysis using the original Farid / Popescu probability and Fourier workflow
-2. composite-splicing / Noiseprint analysis as an optional model-backed component
-3. wavelet noise-blocking analysis
-4. JPEG ghost maps and deeper compression visualizations
-5. median-filter model integration
-6. additional comparison metrics where they can be implemented without large native binaries
-7. optional TruFor model service
-8. RAW-image decoding support
-9. more legacy utilities such as enhancing magnifier and adjustment views where they provide forensic value in a browser
+1. composite-splicing / Noiseprint analysis as an optional model-backed component
+2. wavelet noise-blocking analysis
+3. JPEG ghost maps and deeper compression visualizations
+4. median-filter model integration
+5. additional comparison metrics where they can be implemented without large native binaries
+6. optional TruFor model service
+7. RAW-image decoding support
+8. more legacy utilities such as enhancing magnifier and adjustment views where they provide forensic value in a browser
 
 Heavy model-backed tools should stay optional so the base WebUI remains easy to deploy on a normal CPU host.
 
