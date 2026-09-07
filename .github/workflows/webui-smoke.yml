@@ -32,6 +32,7 @@ jobs:
           node --check web/static/advanced-tools.js
           node --check web/static/plots.js
           node --check web/static/utility-tools.js
+          node --check web/static/ela-tools.js
       - name: Run API smoke tests
         run: pytest -q
       - name: Validate Compose configurations
