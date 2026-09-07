@@ -4,6 +4,7 @@ label: "General",
 tools: [
 { key: "digest", label: "File Digest", icon: "#" },
 { key: "metadata", label: "Metadata", icon: "i" },
+{ key: "thumbnail", label: "Embedded Thumbnail", icon: "T" },
 { key: "geolocation", label: "Geolocation Data", icon: "⌖" },
 ],
 },
