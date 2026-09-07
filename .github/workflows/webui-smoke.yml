@@ -46,3 +46,5 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml -f docker-compose.median.yml config >/dev/null
       - name: Build base container
         run: docker build -t sherloq-webui:test .
+      - name: Verify base container is non-root
+        run: test "$(docker run --rm sherloq-webui:test id -u)" != "0"
