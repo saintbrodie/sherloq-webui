@@ -200,13 +200,12 @@ function renderScatter(result) {
   draw();
 }
 
-const previousPlotRenderResult = renderResult;
 renderResult = function renderResultWithPlots(result) {
   if (result?.type === "scatter") {
     renderScatter(result);
     return;
   }
-  previousPlotRenderResult(result);
+  coreRenderResult(result);
 };
 
 const previousPlotRun = run;
