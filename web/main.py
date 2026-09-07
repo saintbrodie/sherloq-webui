@@ -7,10 +7,11 @@ single monolithic switch statement.
 
 from .app import app
 from .advanced_api import router as advanced_router
+from .advanced_api import service_router
 
 # `web.app` mounts StaticFiles at `/` as its final route. Any routes appended
 # after that catch-all are unreachable, so move the static mount out of the way,
-# register specific advanced API routes, then restore static serving last.
+# register specific API routes, then restore static serving last.
 static_mount = next(
     (route for route in app.router.routes if getattr(route, "name", None) == "static"),
     None,
@@ -18,6 +19,7 @@ static_mount = next(
 if static_mount is not None:
     app.router.routes.remove(static_mount)
 
+app.include_router(service_router)
 app.include_router(advanced_router)
 
 if static_mount is not None:
