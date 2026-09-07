@@ -53,6 +53,11 @@ def _multipart_file(path: Path, original_name: str) -> tuple[bytes, str]:
     return prefix + path.read_bytes() + suffix, boundary
 
 
+def _response_limit() -> int:
+    megabytes = int(os.environ.get("SHERLOQ_MODEL_MAX_RESPONSE_MB", "50"))
+    return max(1, min(megabytes, 250)) * 1024 * 1024
+
+
 def analyze_with_service(
     service: str,
     source: Path,
@@ -60,7 +65,10 @@ def analyze_with_service(
 ) -> tuple[bytes, dict[str, Any]]:
     base_url = _base_url(service)
     body, boundary = _multipart_file(source, original_name)
-    timeout = max(5.0, min(float(os.environ.get("SHERLOQ_MODEL_TIMEOUT_SECONDS", "180")), 1800.0))
+    timeout = max(
+        5.0,
+        min(float(os.environ.get("SHERLOQ_MODEL_TIMEOUT_SECONDS", "180")), 1800.0),
+    )
     request = Request(
         f"{base_url}/analyze",
         data=body,
@@ -72,9 +80,15 @@ def analyze_with_service(
     )
     try:
         with urlopen(request, timeout=timeout) as response:
-            raw = response.read()
+            limit = _response_limit()
+            raw = response.read(limit + 1)
+            if len(raw) > limit:
+                raise ValueError(
+                    f"{service} worker response exceeds the configured "
+                    f"{limit // (1024 * 1024)} MB limit."
+                )
     except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1000]
+        detail = exc.read(1000).decode("utf-8", errors="replace")
         raise ValueError(f"{service} worker returned HTTP {exc.code}: {detail}") from exc
     except URLError as exc:
         raise ValueError(f"Unable to reach {service} worker: {exc.reason}") from exc
@@ -95,4 +109,6 @@ def analyze_with_service(
         raise ValueError(f"{service} worker returned invalid image_base64.") from exc
     if not image:
         raise ValueError(f"{service} worker returned an empty image.")
+    if len(image) > _response_limit():
+        raise ValueError(f"{service} worker returned an oversized image payload.")
     return image, payload
