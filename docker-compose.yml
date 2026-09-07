@@ -6,4 +6,6 @@ services:
     environment:
       SHERLOQ_MAX_UPLOAD_MB: "40"
       SHERLOQ_SESSION_TTL_HOURS: "12"
+      SHERLOQ_BASIC_AUTH_USER: "${SHERLOQ_BASIC_AUTH_USER:-}"
+      SHERLOQ_BASIC_AUTH_PASSWORD: "${SHERLOQ_BASIC_AUTH_PASSWORD:-}"
     restart: unless-stopped
