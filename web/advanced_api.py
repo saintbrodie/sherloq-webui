@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
@@ -17,7 +19,11 @@ def model_services() -> JSONResponse:
     return JSONResponse({"services": service_capabilities()})
 
 
-def _model_result(session_id: str, service: str) -> JSONResponse:
+def _model_result(
+    session_id: str,
+    service: str,
+    params: dict[str, Any] | None = None,
+) -> JSONResponse:
     directory, session = _read_session(session_id)
     source = directory / "source.bin"
     try:
@@ -25,6 +31,7 @@ def _model_result(session_id: str, service: str) -> JSONResponse:
             service,
             source,
             session["original_name"],
+            params=params,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -34,6 +41,10 @@ def _model_result(session_id: str, service: str) -> JSONResponse:
         "splicing": (
             "Noiseprint Composite Splicing",
             "Noiseprint-based localization from the configured model worker.",
+        ),
+        "median": (
+            "Median-Filter Detection",
+            "XGBoost block-classifier result from the configured median detector worker.",
         ),
         "trufor": (
             "TruFor",
@@ -56,6 +67,26 @@ def _model_result(session_id: str, service: str) -> JSONResponse:
 @router.get("/splicing")
 def splicing(session_id: str) -> JSONResponse:
     return _model_result(session_id, "splicing")
+
+
+@router.get("/median")
+def median_filter(
+    session_id: str,
+    min_variance: float = Query(5.0, ge=0.0, le=100.0),
+    threshold: float = Query(0.4, ge=0.0, le=1.0),
+    show_probability: bool = Query(False),
+    speckle_filter: bool = Query(True),
+) -> JSONResponse:
+    return _model_result(
+        session_id,
+        "median",
+        {
+            "min_variance": min_variance,
+            "threshold": threshold,
+            "show_probability": show_probability,
+            "speckle_filter": speckle_filter,
+        },
+    )
 
 
 @router.get("/trufor")
