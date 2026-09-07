@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements-median.txt
 COPY web ./web
 COPY gui/models/median_b64.json ./models/median_b64.json
 
+RUN useradd --create-home --uid 10003 --shell /usr/sbin/nologin sherloq-median
+USER sherloq-median
+
 EXPOSE 8103
 
 CMD ["uvicorn", "web.median_worker:app", "--host", "0.0.0.0", "--port", "8103"]
