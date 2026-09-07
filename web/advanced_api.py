@@ -11,6 +11,7 @@ from .detail_tools import frequency_split, minmax_deviation
 from .file_inspection import inspect_header
 from .forensics_ext import jpeg_ghost_analysis, wavelet_noise_blocking
 from .model_services import analyze_with_service, service_capabilities
+from .noise_tools import signal_separation
 
 router = APIRouter(prefix="/api/sessions/{session_id}/advanced", tags=["advanced-forensics"])
 service_router = APIRouter(tags=["model-services"])
@@ -120,6 +121,45 @@ def frequency_split_route(
             "description": (
                 "Sherloq luminance DFT separation into low/high frequency components plus "
                 "masked magnitude and phase views. Large smoothing kernels are capped for host safety."
+            ),
+        }
+    )
+
+
+@router.get("/signal-separation")
+def signal_separation_route(
+    session_id: str,
+    mode: str = Query("median"),
+    radius: int = Query(1, ge=1, le=10),
+    sigma: int = Query(3, ge=1, le=200),
+    levels: int = Query(32, ge=0, le=255),
+    grayscale: bool = Query(False),
+    denoised: bool = Query(False),
+) -> JSONResponse:
+    directory, _ = _read_session(session_id)
+    image = analysis.load_image(directory / "source.bin")
+    try:
+        payload, stats = signal_separation(
+            image,
+            mode=mode,
+            radius=radius,
+            sigma=sigma,
+            levels=levels,
+            grayscale=grayscale,
+            denoised=denoised,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    filename = _save_asset(directory, f"signal-separation-{mode}-{radius}-{levels}.png", payload)
+    return JSONResponse(
+        {
+            "type": "image",
+            "title": "Signal Separation",
+            "image": _asset_url(session_id, filename),
+            "data": stats,
+            "description": (
+                "Separates a denoised estimate from its absolute residual using the desktop Sherloq "
+                "Median, Gaussian, Box Blur, Bilateral, or Non-Local filters."
             ),
         }
     )
