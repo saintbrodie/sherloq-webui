@@ -20,7 +20,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Compile backend
-        run: python -m py_compile web/analysis.py web/app.py
+        run: python -m compileall -q web tests
+      - name: Check browser JavaScript
+        run: node --check web/static/app.js
       - name: Run API smoke tests
         run: pytest -q
       - name: Build container
