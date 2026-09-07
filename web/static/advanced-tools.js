@@ -17,9 +17,21 @@ const advancedTools = [
       controls: "jpeg-ghosts",
     },
   },
+  {
+    group: "Tampering",
+    modelService: true,
+    tool: {
+      key: "median",
+      label: "Median-Filter Detection",
+      icon: "Md",
+      controls: "median",
+    },
+  },
 ];
 
-const localAdvancedToolKeys = new Set(advancedTools.map((entry) => entry.tool.key));
+const localAdvancedToolKeys = new Set(
+  advancedTools.filter((entry) => !entry.modelService).map((entry) => entry.tool.key),
+);
 const advancedToolKeys = new Set(localAdvancedToolKeys);
 const configuredModelKeys = new Set();
 
@@ -36,7 +48,7 @@ async function discoverModelServices() {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || "Unable to read model-service status");
     const services = payload.services || {};
-    for (const key of ["splicing", "trufor"]) {
+    for (const key of ["splicing", "median", "trufor"]) {
       if (services[key]?.configured) {
         configuredModelKeys.add(key);
         advancedToolKeys.add(key);
@@ -81,6 +93,13 @@ buildControls = function buildAdvancedControls(item) {
     addNum("Offset X", "shift_x", 0, 0, 7, 1, rerun);
     addNum("Offset Y", "shift_y", 0, 0, 7, 1, rerun);
     addNum("Block", "block_size", 16, 4, 64, 4, rerun);
+    return;
+  }
+  if (item.controls === "median") {
+    addNum("Min variance", "min_variance", 5, 0, 100, 1, rerun);
+    addNum("Threshold", "threshold", 0.4, 0, 1, 0.01, rerun);
+    addSelect("View", "show_probability", ["false", "true"], "false", rerun);
+    addSelect("Speckle", "speckle_filter", ["true", "false"], "true", rerun);
   }
 };
 
