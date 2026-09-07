@@ -12,6 +12,7 @@ from .inspection_api import router as inspection_router
 from .ela_api import router as ela_router
 from .history_api import router as history_router
 from .evidence_api import router as evidence_router
+from .security import install_security_headers
 
 # `web.app` mounts StaticFiles at `/` as its final route. Any routes appended
 # after that catch-all are unreachable, so move the static mount out of the way,
@@ -33,4 +34,5 @@ app.include_router(evidence_router)
 if static_mount is not None:
     app.router.routes.append(static_mount)
 
+install_security_headers(app)
 app.version = "0.3.0"
