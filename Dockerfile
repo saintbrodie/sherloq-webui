@@ -11,6 +11,12 @@ RUN pip install --no-cache-dir -r requirements-web.txt
 
 COPY web ./web
 
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin sherloq \
+    && mkdir -p /tmp/sherloq-webui-sessions \
+    && chown -R sherloq:sherloq /tmp/sherloq-webui-sessions
+
+USER sherloq
+
 EXPOSE 8000
 
 CMD ["uvicorn", "web.main:app", "--host", "0.0.0.0", "--port", "8000"]
