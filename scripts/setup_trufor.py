@@ -24,6 +24,32 @@ def md5(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _verify_official_checkout(target: Path) -> None:
+    if not (target / ".git").exists():
+        raise SystemExit(f"Target exists but is not a Git checkout: {target}")
+    remote = subprocess.run(
+        ["git", "-C", str(target), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    normalized = remote.lower().removesuffix(".git").replace("git@github.com:", "https://github.com/")
+    if normalized != "https://github.com/grip-unina/trufor":
+        raise SystemExit(
+            "Refusing to download TruFor weights into a checkout whose origin is not the "
+            f"official GRIP-UNINA repository: {remote}"
+        )
+
+
+def _safe_extract(bundle: zipfile.ZipFile, destination: Path) -> None:
+    root = destination.resolve()
+    for member in bundle.infolist():
+        output = (destination / member.filename).resolve()
+        if output != root and root not in output.parents:
+            raise SystemExit(f"Refusing unsafe path in TruFor weight archive: {member.filename}")
+    bundle.extractall(destination)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -48,8 +74,7 @@ def main() -> int:
     target = Path(args.target).expanduser().resolve()
     if not target.exists():
         subprocess.run(["git", "clone", "--depth", "1", TRUFOR_REPOSITORY, str(target)], check=True)
-    elif not (target / ".git").exists():
-        raise SystemExit(f"Target exists but is not a Git checkout: {target}")
+    _verify_official_checkout(target)
 
     test_docker = target / "test_docker"
     license_file = test_docker / "LICENSE.txt"
@@ -72,7 +97,7 @@ def main() -> int:
                 f"expected {TRUFOR_WEIGHTS_ZIP_MD5}, got {observed}"
             )
         with zipfile.ZipFile(archive) as bundle:
-            bundle.extractall(test_docker)
+            _safe_extract(bundle, test_docker)
 
     if not weight_file.is_file():
         raise SystemExit(
