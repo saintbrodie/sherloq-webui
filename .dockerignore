@@ -13,5 +13,5 @@ gui/*
 !gui/noiseprint
 !gui/noiseprint/**
 !gui/models
- gui/models/*
+gui/models/*
 !gui/models/median_b64.json
