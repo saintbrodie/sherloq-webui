@@ -6,4 +6,12 @@ __pycache__
 .pytest_cache
 .mypy_cache
 screenshots
-gui
+TruFor
+
+# The consolidated Dockerfile needs only the two legacy assets below from gui/.
+gui/*
+!gui/noiseprint
+!gui/noiseprint/**
+!gui/models
+ gui/models/*
+!gui/models/median_b64.json
