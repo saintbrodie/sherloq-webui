@@ -1,0 +1,33 @@
+services:
+  sherloq-webui:
+    environment:
+      SHERLOQ_TRUFOR_URL: http://trufor:8102
+    depends_on:
+      trufor:
+        condition: service_healthy
+
+  trufor:
+    build:
+      context: .
+      dockerfile: Dockerfile.trufor
+    expose:
+      - "8102"
+    environment:
+      SHERLOQ_MAX_UPLOAD_MB: "${SHERLOQ_MAX_UPLOAD_MB:-40}"
+      SHERLOQ_TRUFOR_ROOT: /opt/trufor
+      SHERLOQ_TRUFOR_WEIGHTS: /opt/trufor/test_docker/weights/trufor.pth.tar
+      SHERLOQ_TRUFOR_GPU: "${SHERLOQ_TRUFOR_GPU:--1}"
+      SHERLOQ_TRUFOR_TIMEOUT_SECONDS: "${SHERLOQ_TRUFOR_TIMEOUT_SECONDS:-900}"
+    volumes:
+      - "${SHERLOQ_TRUFOR_ROOT:-./TruFor}:/opt/trufor:ro"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8102/health', timeout=3).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
