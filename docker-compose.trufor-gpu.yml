@@ -1,0 +1,5 @@
+services:
+  trufor:
+    gpus: all
+    environment:
+      SHERLOQ_TRUFOR_GPU: "${SHERLOQ_TRUFOR_GPU:-0}"
