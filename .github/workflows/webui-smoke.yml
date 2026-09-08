@@ -21,11 +21,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Compile backend
-        run: python -m compileall -q web tests
+        run: python -m compileall -q web tests scripts
       - name: Check optional worker isolation
         run: |
           python -c "from web.noiseprint_worker import app; assert app.title == 'Sherloq Noiseprint Worker'"
           python -c "from web.median_worker import app; assert app.title == 'Sherloq Median Filter Worker'"
+          python -c "from web.trufor_worker import app; assert app.title == 'Sherloq TruFor Worker'"
       - name: Check browser JavaScript
         run: |
           node --check web/static/app.js
@@ -41,6 +42,7 @@ jobs:
         run: |
           grep -q '^USER sherloq-noiseprint$' Dockerfile.noiseprint
           grep -q '^USER sherloq-median$' Dockerfile.median
+          grep -q '^USER sherloq-trufor$' Dockerfile.trufor
       - name: Run API smoke tests
         run: pytest -q
       - name: Validate Compose configurations
@@ -48,7 +50,9 @@ jobs:
           docker compose config >/dev/null
           docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml config >/dev/null
           docker compose -f docker-compose.yml -f docker-compose.median.yml config >/dev/null
-          docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml -f docker-compose.median.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.trufor.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.trufor.yml -f docker-compose.trufor-gpu.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.noiseprint.yml -f docker-compose.median.yml -f docker-compose.trufor.yml config >/dev/null
       - name: Build base container
         run: docker build -t sherloq-webui:test .
       - name: Verify base container is non-root
