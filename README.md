@@ -22,7 +22,7 @@ The automated test/Compose/container suite is green. The current focus is real-w
 - searchable forensic tool rail
 - responsive desktop/tablet/mobile layout
 - same-size secondary reference upload for comparison workflows
-- automatic discovery of configured model-backed services
+- automatic discovery of reachable model-backed services
 - exact-byte original-evidence download
 - explicit **Clear evidence** action that immediately deletes the active source, reference, generated assets and analysis history
 - bounded per-session analysis history: 200 entries, 256 KB per record
@@ -110,6 +110,17 @@ Open `http://localhost:8000`.
 
 The default image is CPU-friendly, exposes port `8000`, limits uploads to 40 MB, removes idle sessions after 12 hours, and does not install TensorFlow, XGBoost or PyTorch model runtimes.
 
+Docker packaging is intentionally compact:
+
+```text
+compose.yaml         base app + optional worker profiles
+compose.gpu.yaml     optional NVIDIA override for TruFor
+.dockerignore        shared build-context filtering
+docker/Dockerfile    webui / noiseprint / median / trufor build targets
+```
+
+The workers still use separate container runtimes; they are simply expressed as named targets in one Dockerfile instead of separate root-level Dockerfiles.
+
 ### Optional built-in login
 
 ```bash
@@ -124,13 +135,12 @@ HTTP Basic credentials are encoded, not encrypted. Use this on a trusted LAN or 
 
 ## Optional model workers
 
+Optional workers are Docker Compose profiles. Enable one or several profiles without composing a stack of override files.
+
 ### Noiseprint
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.noiseprint.yml \
-  up --build
+docker compose --profile noiseprint up --build
 ```
 
 This enables **Composite Splicing** at `http://noiseprint:8101`. The bundled legacy Noiseprint assets retain their upstream GRIP-UNINA nonprofit-use terms.
@@ -138,13 +148,22 @@ This enables **Composite Splicing** at `http://noiseprint:8101`. The bundled leg
 ### Median-filter detector
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.median.yml \
-  up --build
+docker compose --profile median up --build
 ```
 
 This enables the legacy XGBoost **Median-Filter Detection** worker at `http://median-filter:8103`.
+
+You can enable several workers together:
+
+```bash
+docker compose \
+  --profile noiseprint \
+  --profile median \
+  --profile trufor \
+  up --build
+```
+
+The WebUI declares the internal worker URLs but probes each worker's `/health` endpoint before enabling its tool. Profiles that are not running therefore stay disabled in the browser instead of appearing falsely available.
 
 ### TruFor
 
@@ -174,23 +193,20 @@ By default this creates/uses `./TruFor`, which is gitignored by Sherloq.
 #### TruFor on CPU
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.trufor.yml \
-  up --build
+docker compose --profile trufor up --build
 ```
 
 The CPU profile uses `SHERLOQ_TRUFOR_GPU=-1`. TruFor is a large neural model, so CPU inference can be slow.
 
 #### TruFor on NVIDIA GPU
 
-Install/configure NVIDIA Container Toolkit on the Docker host, then add the GPU overlay:
+Install/configure NVIDIA Container Toolkit on the Docker host, then add the small GPU override:
 
 ```bash
 docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.trufor.yml \
-  -f docker-compose.trufor-gpu.yml \
+  -f compose.yaml \
+  -f compose.gpu.yaml \
+  --profile trufor \
   up --build
 ```
 
@@ -206,17 +222,11 @@ If the official TruFor checkout lives elsewhere:
 export SHERLOQ_TRUFOR_ROOT=/path/to/TruFor
 ```
 
-The checkout is mounted read-only into the worker. `Dockerfile.trufor.dockerignore` prevents the external source tree and weights from entering the Docker build context.
+The checkout is mounted read-only into the worker. The shared `.dockerignore` excludes `TruFor/`, so the external source tree and weights never enter the Docker build context.
 
 The worker invokes upstream `test_docker/src/trufor_test.py` as a bounded subprocess and reads its native `.npz` output (`map`, `conf`, `score`, `imgsize`). Sherloq colorizes the native localization map for display and exposes the score/confidence values as structured result data. It does not reinterpret the model score as an authenticity verdict.
 
-You can still connect a separately hosted compatible TruFor service instead:
-
-```bash
-export SHERLOQ_TRUFOR_URL=http://your-trufor-worker:8102
-```
-
-A compatible worker exposes `POST /analyze`, accepts evidence as multipart field `file`, and returns JSON containing `image_base64` plus optional `title`, `description`, and `data`.
+You can still connect separately hosted compatible workers by overriding their URLs in a non-Compose deployment. A compatible worker exposes `POST /analyze`, accepts evidence as multipart field `file`, and returns JSON containing `image_base64` plus optional `title`, `description`, and `data`.
 
 ## Run directly with Python
 
@@ -239,21 +249,23 @@ uvicorn web.main:app --host 0.0.0.0 --port 8000
 | `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
 | `SHERLOQ_BASIC_AUTH_USER` | unset | Optional whole-app Basic-auth username |
 | `SHERLOQ_BASIC_AUTH_PASSWORD` | unset | Optional Basic-auth password; must be set with username |
-| `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible worker URL |
-| `SHERLOQ_MEDIAN_URL` | unset | Median worker URL |
-| `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible worker URL |
+| `SHERLOQ_NOISEPRINT_URL` | unset outside Compose | Noiseprint-compatible worker URL |
+| `SHERLOQ_MEDIAN_URL` | unset outside Compose | Median worker URL |
+| `SHERLOQ_TRUFOR_URL` | unset outside Compose | TruFor-compatible worker URL |
+| `SHERLOQ_MODEL_HEALTH_TIMEOUT_SECONDS` | `0.5` | Per-worker discovery health-check timeout |
 | `SHERLOQ_MODEL_TIMEOUT_SECONDS` | `180` | Main WebUI timeout for model-worker requests |
 | `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum accepted model-worker response |
 | `SHERLOQ_TRUFOR_ROOT` | `./TruFor` in Compose | Host path to the official TruFor checkout |
 | `SHERLOQ_TRUFOR_GPU` | `-1` CPU / `0` GPU overlay | TruFor device selection |
 | `SHERLOQ_TRUFOR_TIMEOUT_SECONDS` | `900` | Upstream TruFor subprocess timeout |
+| `SHERLOQ_PORT` | `8000` | Host port used by the Compose deployment |
 
 Uploads are processed by the machine hosting Sherloq. GPS extraction is local. The backend does not automatically contact mapping or reverse-image-search services.
 
 ## Deployment hardening
 
 - base container runs as non-root UID `10001`
-- Noiseprint, median and TruFor worker images declare dedicated non-root users
+- Noiseprint, median and TruFor worker targets declare dedicated non-root users
 - optional same-origin HTTP Basic authentication
 - Content Security Policy restricts script/network/image sources to the self-hosted app
 - clickjacking, MIME sniffing, referrer, COOP/CORP and browser-permission headers
@@ -307,7 +319,7 @@ FastAPI web/main.py
   ├─ web/security.py
   └─ web/model_services.py
           │
-          ├──────── optional HTTP workers
+          ├──────── optional HTTP workers (Compose profiles)
           │          ├─ Noiseprint
           │          ├─ median-filter XGBoost
           │          └─ TruFor subprocess adapter
@@ -317,6 +329,15 @@ headless analysis modules
   ├─ OpenCV / NumPy / Pillow
   ├─ PyWavelets
   └─ rawpy / LibRaw
+
+container packaging
+  ├─ compose.yaml
+  ├─ compose.gpu.yaml
+  └─ docker/Dockerfile
+       ├─ webui
+       ├─ noiseprint
+       ├─ median
+       └─ trufor
 ```
 
 `web/main.py` is the deployment entry point. Heavy ML runtimes stay outside the base CPU-friendly WebUI process.
@@ -353,7 +374,7 @@ FastAPI interactive documentation is available at `/docs`.
 
 The test suite covers all exposed core tools plus targeted tests for RAW fallback, reference comparison, Header inspection, Space Conversion, Global Adjustments, Magnifier, RGB/HSV plot contracts, Min/Max, Frequency Split, Signal Separation, Wavelet Noise, JPEG Ghost Maps, Stereogram, desktop-parity ELA, evidence download, history/full export, session purge, security headers/auth, plugin load order and optional-worker behavior.
 
-TruFor adapter tests do **not** download the licensed model. They simulate the upstream `.npz` contract and verify:
+Model-service discovery tests verify the distinction between a declared worker URL and a worker that is actually reachable. TruFor adapter tests do **not** download the licensed model; they simulate the upstream `.npz` contract and verify:
 
 - readiness/missing-asset reporting,
 - localization-map rendering,
@@ -361,7 +382,7 @@ TruFor adapter tests do **not** download the licensed model. They simulate the u
 - CPU/GPU device metadata, and
 - detection of the upstream script's silent per-image failure mode.
 
-GitHub Actions compiles backend/tests/setup helpers, verifies all optional workers import without eagerly loading heavyweight ML runtimes, syntax-checks browser modules, checks non-root worker declarations, validates CPU/GPU Compose combinations, runs pytest, builds the base image and verifies the base image does not run as UID 0.
+GitHub Actions compiles backend/tests/setup helpers, verifies all optional workers import without eagerly loading heavyweight ML runtimes, syntax-checks browser modules, checks non-root build targets, validates the base and optional Compose profiles plus the GPU overlay, runs pytest, builds the base image and verifies the base image does not run as UID 0.
 
 The CI intentionally does not download TruFor weights or build the large CUDA worker image; model/source licensing and GPU-runtime compatibility are validated by the operator when enabling that optional profile.
 
