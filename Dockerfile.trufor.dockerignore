@@ -1,0 +1,5 @@
+*
+!requirements-trufor.txt
+!web/
+!web/__init__.py
+!web/trufor_worker.py
