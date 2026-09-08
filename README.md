@@ -11,7 +11,9 @@ Sherloq is an analyst toolbox, not an automatic "real/fake" detector. Individual
 
 ## Current status
 
-WebUI v0.3 covers nearly all desktop Sherloq tools that the upstream tool registry marks as functional or active/debug-capable. Heavy model-backed tools are isolated behind optional workers, and utilities that were already external websites remain explicit handoffs rather than silently uploading evidence.
+**WebUI v0.3 is now in beta and ready for hands-on testing.** It covers nearly all desktop Sherloq tools that the upstream tool registry marks as functional or active/debug-capable. Heavy model-backed tools are isolated behind optional workers, and utilities that were already external websites remain explicit handoffs rather than silently uploading evidence.
+
+The automated test/Compose/container suite is green. The current focus is real-world validation: ordinary camera photos, screenshots, edited and recompressed images, social-media outputs, RAW files, large images, cross-browser behavior, and a real TruFor/NVIDIA run. Issues found during that testing should drive the next fixes before broader release packaging.
 
 ### Workspace and case handling
 
@@ -363,13 +365,27 @@ GitHub Actions compiles backend/tests/setup helpers, verifies all optional worke
 
 The CI intentionally does not download TruFor weights or build the large CUDA worker image; model/source licensing and GPU-runtime compatibility are validated by the operator when enabling that optional profile.
 
+## Beta testing focus
+
+The feature port is now broad enough that testing should drive the next work. Useful beta coverage includes:
+
+1. real JPEGs from different cameras/phones and quality levels,
+2. screenshots, edited images, social-media recompressions and resized files,
+3. representative RAW formats from different camera vendors,
+4. Chrome and Firefox interaction checks, especially Magnifier ROI and RGB/HSV 3D plots,
+5. 12–40 MP images to validate performance limits and expensive-tool behavior,
+6. report export, session purge and TTL/storage behavior under normal Docker use, and
+7. a real TruFor run with official weights on an NVIDIA Docker host.
+
+When reporting a problem, include the input format/dimensions, tool and settings used, browser, deployment mode, and the visible/API error if one was produced. Avoid sharing sensitive evidence publicly.
+
 ## Remaining work
 
-The remaining work is now mostly validation and optional enhancements rather than missing desktop ports:
+Post-beta work should be driven primarily by findings from the real-world test matrix. Beyond bug fixes, likely follow-ons are:
 
-1. broaden parity testing against real-world RAW/JPEG evidence sets,
-2. optionally improve Header Structure toward ExifTool-level container parsing without making ExifTool mandatory,
-3. validate the TruFor container against real official weights on representative NVIDIA hosts, and
+1. optionally improve Header Structure toward ExifTool-level container parsing without making ExifTool mandatory,
+2. expand real-world regression fixtures where redistribution/licensing permits,
+3. package a tagged/containerized WebUI beta release once manual testing is satisfactory, and
 4. consider new capabilities such as PRNU, illuminant mapping, dead/hot-pixel analysis or multiple-compression ML. Desktop Sherloq itself marks those last items unimplemented, so they are new capabilities rather than missing WebUI ports.
 
 ## Legacy desktop application
