@@ -1,233 +1,405 @@
 <p align="center">
   <img src="logo/sherloq.png" width="600px" alt="Sherloq" />
-  <br><b>An open source digital image forensic toolset</b>
+  <br><b>Open-source digital image forensics in the browser</b>
 </p>
 
-# Introduction
-"*Forensic Image Analysis is the application of image science and domain expertise to interpret the content of an image and/or the image itself in legal matters. Major subdisciplines of Forensic Image Analysis with law enforcement applications include: Photogrammetry, Photographic Comparison, Content Analysis, and Image Authentication.*" (Scientific Working Group on Imaging Technologies)
+# Sherloq WebUI
 
-**Sherloq** is a personal research project about implementing a fully integrated environment for digital image forensics. It is not meant as an automatic tool that decide if an image is forged or not (that tool probably will never exist...), but as a companion in experimenting with various algorithms found in the latest research papers and workshops.
+This fork turns Sherloq's PySide desktop forensic toolkit into a hostable browser application. The original desktop implementation remains under [`gui/`](gui/) as a reference; the browser application lives under [`web/`](web/).
 
-While many commercial solutions have high retail prices and often reserved to law enforcement and government agencies only, this toolset aims to be a both an extensible framework and a starting point for anyone interested in making experiments in this particular application of digital signal processing.
+Sherloq is an analyst toolbox, not an automatic "real/fake" detector. Individual techniques surface clues that should be interpreted together and in context.
 
-I strongly believe that *security-by-obscurity* is the wrong way to offer any kind of forensic service (i.e. "Using this proprietary software I guarantee you that this photo *is* pristine... and you have to trust me!"). Following the open-source philosophy, everyone should be able to try various techniques on their own, gain knowledge and share it to the community... even better if they contribute with code improvements! :)
+## Current status
 
-- [History](#history)
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Installation](#installation)
-- [Updates](#updates)
-- [Bibliography](#bibliography)
+**WebUI v0.3 is now in beta and ready for hands-on testing.** It covers nearly all desktop Sherloq tools that the upstream tool registry marks as functional or active/debug-capable. Heavy model-backed tools are isolated behind optional workers, and utilities that were already external websites remain explicit handoffs rather than silently uploading evidence.
 
-# History
-The first version was written in 2015 using C++11 to build a command line utility with many options, but soon it turned to be too cumbersome and not much interactive. That version could be compiled with CMake after installing OpenCV, Boost and AlgLib libraries. This first proof of concept offered about 80% of planned features (see below for the full list).
+The automated test/Compose/container suite is green. The current focus is real-world validation: ordinary camera photos, screenshots, edited and recompressed images, social-media outputs, RAW files, large images, cross-browser behavior, and a real TruFor/NVIDIA run. Issues found during that testing should drive the next fixes before broader release packaging.
 
-While also including novel algorithms, the 2017 version mainly added a Qt-based multi-window GUI to provide a better user experience. Multiple analyses could be shown on screen and a fast zoom/scroll  viewer was implemented for easier image navigation. That project could be compiled with Qt Creator with Qt 5 and OpenCV 3 and covered about 70% of planned features.
+### Workspace and case handling
 
-Fast-forward to 2020 when I decided to port everything in Python (PySide2 + Matplotlib + OpenCV) for easier development and deployment. While this iteration is just begun and I have yet to port all the previous code on the new platform, I think this will be the final "form" of the project (as long as someone does not volunteer up to develop a nice web application!).
+- drag-and-drop and file-picker evidence loading
+- zoomable original-image viewer
+- searchable forensic tool rail
+- responsive desktop/tablet/mobile layout
+- same-size secondary reference upload for comparison workflows
+- automatic discovery of configured model-backed services
+- exact-byte original-evidence download
+- explicit **Clear evidence** action that immediately deletes the active source, reference, generated assets and analysis history
+- bounded per-session analysis history: 200 entries, 256 KB per record
+- JSON report export including analyses, parameters, structured data and generated-asset references
 
-I'm happy to share my code and get in contact with anyone interested to improve or test it, but please keep in mind that this repository is *not* intended for distributing a final product, my aim is just to publicly track development of an *unpretentious educational tool*, so expect bugs, unpolished code and missing features! ;)
+### Input formats
 
-# Features
-This list contains the functions that the toolkit will (hopefully) provide once beta stage is reached (**NOTE:** functions displayed in _italics_ inside the program are not yet implemented!).
+- JPEG, PNG, TIFF, BMP and WebP through OpenCV/Pillow
+- camera RAW fallback through `rawpy` / LibRaw
+- common RAW picker extensions including NEF, RAF, CR2/CR3, DNG, ARW, DCR, MRW, PEF, CRW, SR2, ORF, RW2 and RAW
+- RAW rendering mirrors desktop Sherloq: camera white balance enabled and automatic brightening disabled
+- LibRaw metadata fallback for Metadata and report export
 
-## Interface
-- Modern Qt-based GUI with multiple tool window management
-- Support for many formats (JPEG, PNG, TIFF, BMP, WebP, PGM, PFM, GIF)
-- Highly responsive image viewer with real-time pan and zoom
-- Many state-of-the-art algorithms to try out interactively
-- Export both visual and textual results of the analysis
-- Extensive online help with explanations and tutorials
+RAW detection is content-driven on the server. Uploaded evidence is stored under an internal session filename, so decoding does not rely on the original extension being preserved.
 
-## Tools
+## Ported tools
 
-### General
-- __Original Image__: display the unaltered reference image for visual inspection
-- __File Digest__: retrieve physical file information, crypto and perceptual hashes
-- __Hex Editor__: open an external hexadecimal editor to show and edit raw bytes
-- __Similar Search__: browse online search services to find visually similar images
+### General and metadata
 
-### Metadata
-- __Header Structure__: dump the file header structure and display an interactive view
-- __EXIF Full Dump__: scan through file metadata and gather all available information
-- __Thumbnail Analysis__: extract optional embedded thumbnail and compare with original
-- __Geolocation Data__: retrieve optional geolocation data and show it on a world map
+- **Original Image** — persistent source viewer and exact-byte evidence download
+- **File Digest** — file information, MD5, SHA-1/SHA-2/SHA-3 and perceptual hashes
+- **File Header** — bounded hex/ASCII view with common raster/RAW signature recognition
+- **Metadata** — EXIF/image metadata plus LibRaw fallback
+- **Thumbnail Analysis** — embedded JPEG EXIF thumbnail extraction, reconstruction and source/thumbnail difference
+- **Geolocation** — local EXIF GPS extraction with decimal coordinates
 
-### Inspection
-- __Enhancing Magnifier__: magnifying glass with enhancements for better identifying forgeries
-- __Channel Histogram__: display single color channels or RGB composite interactive histogram
-- __Global Adjustments__: apply standard image adjustments (brightness, hue, saturation, ...)
-- __Reference Comparison__: open a synchronized double view for comparison with another picture
+### Inspection and color
 
-### Detail
-- __Luminance Gradient__: analyze horizontal/vertical brightness variations across the image
-- __Echo Edge Filter__: use derivative filters to reveal artificial out-of-focus regions
-- __Wavelet Threshold__: reconstruct image with different wavelet coefficient thresholds
-- __Frequency Split__: split image luminance into high and low frequency components
+- **Enhancing Magnifier** — drag-select an ROI and apply histogram equalization or percentile auto-contrast
+- **Channel Histogram** — RGB + luminance histogram
+- **Channel Inspection** — RGB/luminance views
+- **Global Adjustments** — brightness, saturation, hue, gamma, shadows/highlights, tonal sweep, sharpening, histogram/CLAHE equalization, thresholding and inversion; source evidence is never overwritten
+- **Reference Comparison** — normalized absolute difference, signed difference and SSIM map plus RMSE, MAE, PSNR, SSIM, SAM, ERGAS, mean bias, PFE, RASE, UQI and bounded 3D-color histogram metrics
+- **RGB / HSV Plots** — browser-native 2D and rotatable 3D scatter with deterministic bounded sampling
+- **Space Conversion** — RGB, CMYK, four grayscale formulas, HSV, HLS, YCrCb, XYZ, Lab and Luv
+- **PCA Projection** — principal RGB color components with explained variance
+- **Pixel Statistics** — per-channel statistics
 
-### Colors
-- __RGB/HSV Plots__: display interactive 2D and 3D plots of RGB and HSV pixel values
-- __Space Conversion__: convert RGB channels into HSV/YCbCr/Lab/Luv/CMYK/Gray spaces
-- __PCA Projection__: use color PCA to project pixel onto most salient components
-- __Pixel Statistics__: compute minimum/maximum/average RGB values for every pixel
+### Detail and noise
 
-### Noise
-- __Noise Separation__: estimate and extract different kind of image noise components
-- __Min/Max Deviation__: highlight pixels deviating from block-based min/max statistics
-- __Bit Planes Values__: show individual bit planes to find inconsistent noise patterns
-- __Wavelet Blocking__: shows averaged noise levels in an image to find noise inconsistencies
-- __PRNU Identification__: exploit sensor pattern noise introduced by different cameras
+- **Luminance Gradient**
+- **Echo Edge Filter**
+- **Wavelet Threshold**
+- **Frequency Spectrum**
+- **Frequency Split** — low/high-frequency images plus DFT magnitude and phase
+- **Signal Separation** — median, Gaussian, box, bilateral and non-local denoising with residual/denoised and grayscale modes
+- **Noise Residual**
+- **Min/Max Deviation**
+- **Bit Planes**
+- **Wavelet Noise Blocking** — Mahdian/Saic db8 local-noise estimate
 
-### JPEG
-- __Quality Estimation__: extract quantization tables and estimate last saved JPEG quality
-- __Error Level Analysis__: show pixel-level difference against fixed compression levels
-- __Multiple Compression__: use a machine learning model to detect multiple compression
-- __JPEG Ghost Maps__: highlight traces of different compression levels in difference images
+### JPEG and tampering
 
-### Tampering
-- __Contrast Enhancement__: analyze color distribution to detect contrast enhancements
-- __Copy-Move Forgery__: use invariant feature descriptors for cloned area detection
-- __Composite Splicing__: exploit DCT statistics for automatic splicing zone detection
-- __Image Resampling__: estimate 2D pixel interpolation for detecting resampling traces
-
+- **JPEG Quality Estimation** — quantization-table estimate
+- **Error Level Analysis** — desktop-parity OpenCV recompression with Q75/scale-50/contrast-20 defaults, square-root/linear modes and optional grayscale
+- **JPEG Ghost Maps** — Farid-style quality sweep and 8×8 lattice offsets
+- **Contrast Statistics**
+- **Copy-Move Forgery** — ORB, BRISK or AKAZE local-feature self matching
+- **Image Resampling** — Popescu/Farid interpolation probability plus Fourier periodicity analysis
+- **Composite Splicing** — optional Noiseprint worker
+- **Median Filtering** — optional legacy XGBoost worker
+- **TruFor** — optional packaged worker that runs the separately supplied official GRIP-UNINA TruFor checkout/weights
 
 ### Various
-- __Median Filtering__: detect processing traces left by nonlinear median filtering
-- __Illuminant Map__: estimate scene local light direction on estimated 3D surfaces
-- __Dead/Hot Pixels__: detect and fix dead/hot pixels caused by sensor imperfections
-- __Stereogram Decoder__: decode 3D images concealed in crossed-eye autostereograms
 
+- **Stereogram Decoder** — pattern, silhouette, optical-flow depth and shaded views
 
-# Screenshots
-<p align="center">
-  <img src="screenshots/0_general.png" alt="General"/>
-  <br><b>General</b>: Original Image, Hex Editor, File Digest, Similar Search
-</p>
+## External handoffs
 
-<p align="center">
-  <img src="screenshots/1_metadata.png" alt="Metadata"/>
-  <br><b>Metadata</b>: EXIF Full Dump, Header Structure
-</p>
+Desktop Sherloq's Hex Editor and Similarity Search are embedded third-party websites rather than local algorithms. The WebUI keeps that boundary explicit.
 
-<p align="center">
-  <img src="screenshots/2_inspection.png" alt="Inspection"/>
-  <br><b>Inspection</b>: Enhancing Magnifier, Channel Histogram, Reference Comparison
-</p>
+- **Hex Editor** provides exact-byte evidence download and opens HexEd.it separately.
+- **Similarity Search** provides exact-byte evidence download plus TinEye, Google and Bing links.
+- Sherloq never uploads evidence to those services automatically.
 
-<p align="center">
-  <img src="screenshots/3_detail.png" alt="Detail"/>
-  <br><b>Detail</b>: Luminance Gradient, Echo Edge Filter, Wavelet Threshold, Frequency Split
-</p>
+## Quick start with Docker
 
-<p align="center">
-  <img src="screenshots/4_colors.png" alt="Colors"/>
-  <br><b>Colors</b>: RGB/HSV Plots, Space Conversion, PCA Projection, Pixel Statistics 
-</p>
-
-<p align="center">
-  <img src="screenshots/5_noise.png" alt="Noise"/>
-  <br><b>Noise</b>: Signal Separation, Min/Max Deviation, Bit Plane Values
-</p>
-
-<p align="center">
-  <img src="screenshots/6_jpeg.png" alt="JPEG"/>
-  <br><b>JPEG</b>: Quality Estimation, Error Level Analysis 
-</p>
-
-<p align="center">
-  <img src="screenshots/7_tampering.png" alt="Tampering"/>
-  <br><b>Tampering</b>: Contrast Enhancement, Copy/Move Forgery, Composite Splicing, Median Filtering
-</p>
-
-# Installation
-
-## [1/4] Download source code
-
-Clone the current repository into a local folder and change current directory to it.
-
-## [2/4] Virtual environment
-
-For more information about Python Virtual Environments, you can read [here](https://realpython.com/python-virtual-environments-a-primer/) or [here](https://chriswarrick.com/blog/2018/09/04/python-virtual-environments/).
-Choose one of the following method to create a new virtual environment with Python 3.11 for Sherloq.
-
-### [Built-in Virtual Environment](https://docs.python.org/3/library/venv.html)
-Change current directory to Sherloq root, then initialize virtual environment folder:
-```console
-$ python -m venv .venv
-```
-Then activate it:
-#### Linux
-```console
-$ source .venv/bin/activate
+```bash
+git clone https://github.com/saintbrodie/sherloq-webui.git
+cd sherloq-webui
+docker compose up --build
 ```
 
-#### Windows
-```console
-C:\> .venv\Scripts\activate.bat
+Open `http://localhost:8000`.
+
+The default image is CPU-friendly, exposes port `8000`, limits uploads to 40 MB, removes idle sessions after 12 hours, and does not install TensorFlow, XGBoost or PyTorch model runtimes.
+
+### Optional built-in login
+
+```bash
+export SHERLOQ_BASIC_AUTH_USER=analyst
+export SHERLOQ_BASIC_AUTH_PASSWORD='choose-a-long-password'
+docker compose up --build
 ```
 
-### [VirtualEnvWrapper](https://virtualenvwrapper.readthedocs.io/en/latest/)
+Both variables must be set together. A partial configuration causes startup to fail rather than silently leaving the service open.
 
-#### Linux
-```console
-$ sudo apt install python3-distutils python3-dev python3-testresources subversion
-$ wget https://bootstrap.pypa.io/get-pip.py
-$ sudo python3 get-pip.py
-$ rm get-pip.py
-$ sudo pip install virtualenv virtualenvwrapper
-$ echo -e "\n# Python Virtual Environments" >> ~/.bashrc
-$ echo "export WORKON_HOME=$HOME/.virtualenvs" >> ~/.bashrc
-$ echo "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3" >> ~/.bashrc
-$ echo "source /usr/local/bin/virtualenvwrapper.sh" >> ~/.bashrc
-$ source ~/.bashrc
-$ mkvirtualenv sq -p python3
+HTTP Basic credentials are encoded, not encrypted. Use this on a trusted LAN or behind HTTPS/TLS. If you already use an authenticated reverse proxy, leave these variables unset.
+
+## Optional model workers
+
+### Noiseprint
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.noiseprint.yml \
+  up --build
 ```
-#### Windows
-1. Download *Python 3.11* setup package from [official site](https://www.python.org/downloads/)
-2. Install ensuring that "Add Python to PATH" and "PIP installation" are enabled
-3. Open *Command Prompt* and enter the following commands:
-```console
-> pip install virtualenv virtualenvwrapper-win
-> mkvirtualenv sq
+
+This enables **Composite Splicing** at `http://noiseprint:8101`. The bundled legacy Noiseprint assets retain their upstream GRIP-UNINA nonprofit-use terms.
+
+### Median-filter detector
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.median.yml \
+  up --build
 ```
-### [Conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html)
-1. Install latest **Miniconda** following instructions from the [official site](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html)
-2. Create a new **virtual environment**: `conda create --name sq python=3.11 -y`
-3. **Activate** the `sq` environment: `conda activate sq`
 
-## [3/4] Install dependencies
+This enables the legacy XGBoost **Median-Filter Detection** worker at `http://median-filter:8103`.
 
-```console
+### TruFor
+
+TruFor source and pretrained weights are **not committed to this repository and are not copied into Sherloq's worker image**. They remain a separately supplied upstream component under GRIP-UNINA's informational/nonprofit-use license.
+
+Sherloq includes a setup helper that:
+
+1. requires explicit acknowledgement of the upstream license,
+2. clones the official `grip-unina/TruFor` repository,
+3. downloads the official weight archive documented by TruFor,
+4. verifies the upstream-documented archive MD5 (`7bee48f3476c75616c3c5721ab256ff8`), and
+5. extracts the weights into the official `test_docker/weights` layout.
+
+Review the upstream license before running it:
+
+- repository: https://github.com/grip-unina/TruFor
+- license: https://github.com/grip-unina/TruFor/blob/main/test_docker/LICENSE.txt
+
+Then:
+
+```bash
+python scripts/setup_trufor.py --accept-license
+```
+
+By default this creates/uses `./TruFor`, which is gitignored by Sherloq.
+
+#### TruFor on CPU
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.trufor.yml \
+  up --build
+```
+
+The CPU profile uses `SHERLOQ_TRUFOR_GPU=-1`. TruFor is a large neural model, so CPU inference can be slow.
+
+#### TruFor on NVIDIA GPU
+
+Install/configure NVIDIA Container Toolkit on the Docker host, then add the GPU overlay:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.trufor.yml \
+  -f docker-compose.trufor-gpu.yml \
+  up --build
+```
+
+The GPU overlay requests all NVIDIA GPUs and defaults to GPU `0`. Override it when needed:
+
+```bash
+export SHERLOQ_TRUFOR_GPU=1
+```
+
+If the official TruFor checkout lives elsewhere:
+
+```bash
+export SHERLOQ_TRUFOR_ROOT=/path/to/TruFor
+```
+
+The checkout is mounted read-only into the worker. `Dockerfile.trufor.dockerignore` prevents the external source tree and weights from entering the Docker build context.
+
+The worker invokes upstream `test_docker/src/trufor_test.py` as a bounded subprocess and reads its native `.npz` output (`map`, `conf`, `score`, `imgsize`). Sherloq colorizes the native localization map for display and exposes the score/confidence values as structured result data. It does not reinterpret the model score as an authenticity verdict.
+
+You can still connect a separately hosted compatible TruFor service instead:
+
+```bash
+export SHERLOQ_TRUFOR_URL=http://your-trufor-worker:8102
+```
+
+A compatible worker exposes `POST /analyze`, accepts evidence as multipart field `file`, and returns JSON containing `image_base64` plus optional `title`, `description`, and `data`.
+
+## Run directly with Python
+
+Python 3.11+ is recommended for the base WebUI.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate       # Linux/macOS
+# .venv\Scripts\activate      # Windows
+pip install -r requirements-web.txt
+uvicorn web.main:app --host 0.0.0.0 --port 8000
+```
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SHERLOQ_WORKDIR` | system temp directory | Temporary evidence, session metadata and generated assets |
+| `SHERLOQ_MAX_UPLOAD_MB` | `40` | Maximum evidence/reference upload size |
+| `SHERLOQ_SESSION_TTL_HOURS` | `12` | Idle session lifetime before cleanup |
+| `SHERLOQ_BASIC_AUTH_USER` | unset | Optional whole-app Basic-auth username |
+| `SHERLOQ_BASIC_AUTH_PASSWORD` | unset | Optional Basic-auth password; must be set with username |
+| `SHERLOQ_NOISEPRINT_URL` | unset | Noiseprint-compatible worker URL |
+| `SHERLOQ_MEDIAN_URL` | unset | Median worker URL |
+| `SHERLOQ_TRUFOR_URL` | unset | TruFor-compatible worker URL |
+| `SHERLOQ_MODEL_TIMEOUT_SECONDS` | `180` | Main WebUI timeout for model-worker requests |
+| `SHERLOQ_MODEL_MAX_RESPONSE_MB` | `50` | Maximum accepted model-worker response |
+| `SHERLOQ_TRUFOR_ROOT` | `./TruFor` in Compose | Host path to the official TruFor checkout |
+| `SHERLOQ_TRUFOR_GPU` | `-1` CPU / `0` GPU overlay | TruFor device selection |
+| `SHERLOQ_TRUFOR_TIMEOUT_SECONDS` | `900` | Upstream TruFor subprocess timeout |
+
+Uploads are processed by the machine hosting Sherloq. GPS extraction is local. The backend does not automatically contact mapping or reverse-image-search services.
+
+## Deployment hardening
+
+- base container runs as non-root UID `10001`
+- Noiseprint, median and TruFor worker images declare dedicated non-root users
+- optional same-origin HTTP Basic authentication
+- Content Security Policy restricts script/network/image sources to the self-hosted app
+- clickjacking, MIME sniffing, referrer, COOP/CORP and browser-permission headers
+- all `/api/` responses use `Cache-Control: no-store` and `Pragma: no-cache`
+- explicit session purge instead of relying only on TTL cleanup
+- HSTS is not forced because Sherloq is commonly deployed on LAN HTTP or behind a TLS-terminating reverse proxy
+
+For an internet-reachable deployment, use HTTPS and appropriate reverse-proxy/firewall controls.
+
+## Host-safety and forensic-fidelity choices
+
+- Resampling refuses oversized evidence instead of downscaling it and introducing interpolation artifacts.
+- Frequency Split guards oversized jobs and caps very large smoothing kernels.
+- Non-local Signal Separation is size-bounded.
+- JPEG Ghost sweeps are bounded because they repeatedly recompress the full evidence.
+- RGB/HSV plots use deterministic bounded sampling.
+- Reference Comparison uses a bounded 32×32×32 color histogram instead of the desktop tool's potentially huge 256³ histogram.
+- Analysis-history records are size/count bounded.
+- Model-worker request/response sizes and timeouts are bounded.
+- TruFor source/weights are mounted read-only and inference runs in its own process/container.
+
+## Browser extension architecture
+
+`app.js` remains the stable core browser workspace and `advanced-tools.js` is the compatibility layer for the first large port. Newer features register through `plugin-runtime.js` rather than chaining replacements of global `run`, `upload`, `buildControls` or `renderResult` functions.
+
+The runtime provides tool registration, control builders, custom runners/renderers, post-upload/post-render hooks and a common advanced-endpoint runner.
+
+## Architecture
+
+```text
+browser
+  ├─ app.js
+  ├─ advanced-tools.js
+  ├─ plugin-runtime.js
+  ├─ plots.js
+  ├─ utility-tools.js
+  ├─ ela-tools.js
+  ├─ external-tools.js
+  ├─ session-tools.js
+  └─ history.js
+          │
+          ▼
+FastAPI web/main.py
+  ├─ web/app.py
+  ├─ web/advanced_api.py
+  ├─ web/inspection_api.py
+  ├─ web/ela_api.py
+  ├─ web/evidence_api.py
+  ├─ web/session_api.py
+  ├─ web/history_api.py
+  ├─ web/security.py
+  └─ web/model_services.py
+          │
+          ├──────── optional HTTP workers
+          │          ├─ Noiseprint
+          │          ├─ median-filter XGBoost
+          │          └─ TruFor subprocess adapter
+          │                  └─ read-only official TruFor checkout + weights
+          ▼
+headless analysis modules
+  ├─ OpenCV / NumPy / Pillow
+  ├─ PyWavelets
+  └─ rawpy / LibRaw
+```
+
+`web/main.py` is the deployment entry point. Heavy ML runtimes stay outside the base CPU-friendly WebUI process.
+
+## API highlights
+
+- `GET /api/health`
+- `POST /api/sessions`
+- `DELETE /api/sessions/{id}` — purge the session and all session data
+- `POST /api/sessions/{id}/reference`
+- `GET /api/sessions/{id}/evidence`
+- `GET /api/sessions/{id}/tools/{tool}`
+- `GET /api/sessions/{id}/advanced/ela`
+- `GET /api/sessions/{id}/advanced/magnifier`
+- `GET /api/sessions/{id}/advanced/space-conversion`
+- `GET /api/sessions/{id}/advanced/rgb-hsv-plots`
+- `GET /api/sessions/{id}/advanced/stereogram`
+- `GET /api/sessions/{id}/advanced/frequency-split`
+- `GET /api/sessions/{id}/advanced/signal-separation`
+- `GET /api/sessions/{id}/advanced/minmax`
+- `GET /api/sessions/{id}/advanced/wavelet-noise`
+- `GET /api/sessions/{id}/advanced/jpeg-ghosts`
+- `GET /api/sessions/{id}/advanced/splicing`
+- `GET /api/sessions/{id}/advanced/median`
+- `GET /api/sessions/{id}/advanced/trufor`
+- `POST /api/sessions/{id}/history`
+- `GET /api/sessions/{id}/history`
+- `GET /api/sessions/{id}/export-full`
+- `GET /api/sessions/{id}/assets/{file}`
+
+FastAPI interactive documentation is available at `/docs`.
+
+## Validation
+
+The test suite covers all exposed core tools plus targeted tests for RAW fallback, reference comparison, Header inspection, Space Conversion, Global Adjustments, Magnifier, RGB/HSV plot contracts, Min/Max, Frequency Split, Signal Separation, Wavelet Noise, JPEG Ghost Maps, Stereogram, desktop-parity ELA, evidence download, history/full export, session purge, security headers/auth, plugin load order and optional-worker behavior.
+
+TruFor adapter tests do **not** download the licensed model. They simulate the upstream `.npz` contract and verify:
+
+- readiness/missing-asset reporting,
+- localization-map rendering,
+- score/confidence extraction,
+- CPU/GPU device metadata, and
+- detection of the upstream script's silent per-image failure mode.
+
+GitHub Actions compiles backend/tests/setup helpers, verifies all optional workers import without eagerly loading heavyweight ML runtimes, syntax-checks browser modules, checks non-root worker declarations, validates CPU/GPU Compose combinations, runs pytest, builds the base image and verifies the base image does not run as UID 0.
+
+The CI intentionally does not download TruFor weights or build the large CUDA worker image; model/source licensing and GPU-runtime compatibility are validated by the operator when enabling that optional profile.
+
+## Beta testing focus
+
+The feature port is now broad enough that testing should drive the next work. Useful beta coverage includes:
+
+1. real JPEGs from different cameras/phones and quality levels,
+2. screenshots, edited images, social-media recompressions and resized files,
+3. representative RAW formats from different camera vendors,
+4. Chrome and Firefox interaction checks, especially Magnifier ROI and RGB/HSV 3D plots,
+5. 12–40 MP images to validate performance limits and expensive-tool behavior,
+6. report export, session purge and TTL/storage behavior under normal Docker use, and
+7. a real TruFor run with official weights on an NVIDIA Docker host.
+
+When reporting a problem, include the input format/dimensions, tool and settings used, browser, deployment mode, and the visible/API error if one was produced. Avoid sharing sensitive evidence publicly.
+
+## Remaining work
+
+Post-beta work should be driven primarily by findings from the real-world test matrix. Beyond bug fixes, likely follow-ons are:
+
+1. optionally improve Header Structure toward ExifTool-level container parsing without making ExifTool mandatory,
+2. expand real-world regression fixtures where redistribution/licensing permits,
+3. package a tagged/containerized WebUI beta release once manual testing is satisfactory, and
+4. consider new capabilities such as PRNU, illuminant mapping, dead/hot-pixel analysis or multiple-compression ML. Desktop Sherloq itself marks those last items unimplemented, so they are new capabilities rather than missing WebUI ports.
+
+## Legacy desktop application
+
+```bash
 cd gui
 pip install -r requirements.txt
-```
-
-## [4/4] Launch program
-```console
 python sherloq.py
 ```
 
-NOTE for Linux users: if this error is displayed:
-```
-qt.qpa.plugin: From 6.5.0, xcb-cursor0 or libxcb-cursor0 is needed to load the Qt xcb platform plugin.
-qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
-This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
-```
-Run this command from the terminal: `sudo apt install -y libxcb-cursor-dev` 
+## Project philosophy
 
-# Updates
-When a new version is released, update the local working copy using Git, SVN or manually downloading from this repository and (if necessary) update the packages in the virtual environment following [this guide](https://www.activestate.com/resources/quick-reads/how-to-update-all-python-packages/).
+Compression, resizing, denoising, social-media processing, camera pipelines, screenshots, AI generation and ordinary editing can all produce artifacts that resemble manipulation indicators. Sherloq exposes multiple complementary measurements so an analyst can inspect evidence rather than trusting one opaque score.
 
-# Recommended Resources for Getting Started
-- Paper with practical examples and thoughtful analysis for techniques that have since been implemented in Sherloq: "A Picture's Worth: Digital Image Analysis and Forensics" ([Neal Krawetz](https://www.hackerfactor.com/)) [[paper](http://blackhat.com/presentations/bh-dc-08/Krawetz/Whitepaper/bh-dc-08-krawetz-WP.pdf)]
-- Thesis with practical examples and thoughtful analysis for using the "JPEG Ghosts", "Image Resampling" and "Noise Wavelet Blocking" tools implemented in Sherloq. This work also offers insights towards the use and reliability of AI driven approaches in Digital Image Forensics. ([UHstudent](https://github.com/UHstudent)) [[paper](https://github.com/UHstudent/digital_image_forensics_thesis/blob/main/Thesis%20text_Digital%20Image%20Forensics-A%20Comparative%20Study%20between%20AI%20and%20traditional%20approaches.pdf)]
+## License and attribution
 
-# References for Algorithms Implemented in Sherloq
-- Image Resampling: "Exposing Digital Forgeries by Detecting Traces of Re-sampling" (Alin C. Popescu and Hany Farid) [[paper](https://farid.berkeley.edu/downloads/publications/sp05.pdf)]
-- JPEG Ghosts: "Exposing Digital Forgeries from JPEG Ghosts" (H. Farid) [[paper](https://farid.berkeley.edu/downloads/publications/tifs09.pdf)]
-- Noise Wavelet Blocking: "Using noise inconsistencies for blind image forensics" (Babak Mahdian and Stanislav Saic) [[paper](https://www.utia.cas.cz/files/Soutez_09/Saic/Mahdian%20Saic%20_2009_Image-and-Vision-Computingfinal%20final%20version%20.pdf)]
-
-
-# Bibliography
-- "Noiseprint: a CNN-based camera model fingerprint" (Davide Cozzolino, Luisa Verdoliva) [[website](http://www.grip.unina.it/research/83-multimedia_forensics/107-noiseprint.html)]
-- "Two Improved Forensic Methods of Detecting Contrast Enhancement in Digital Images" (Xufeng Lin, Xingjie Wei and Chang-Tsun Li) [[paper](https://d1wqtxts1xzle7.cloudfront.net/45863267/Two_Improved_Forensic_Methods_of_Detecti20160522-6998-1xf1cu.pdf?1463954131=&response-content-disposition=inline%3B+filename%3DTwo_improved_forensic_methods_of_detecti.pdf&Expires=1598306603&Signature=dYuKum8UF2NJS~2Jz2pFObtzdjKfYIcYD4GksLVNN0izhm2k10TVPV~UHKS0DbMLXKaurZPq7uvG~qQwQwwF4JKbY0zoCqZI-p9KZsEMYhlRJrYM8nNQL0V7sHMTLd3aYjNLWup~-i1RzJcJdRqzjU9doGxRJvHdsX6tbwIxNRq3JiYyldaXei4xJSJAbX7EoUOut2uh~jsPnsAbDOIrYpwUhebut-XsN2c5MXargD2UhKxZ3Ifwo4hJvz8Bl2sPys~E8P6vDlqOeEHoeByZms6JQON97EGsCTT5GYF98rQLDbqj0NroYE2zDMGcu9IUp8VV1Fotqci1G6eELTXx6w__&Key-Pair-Id=APKAJLOHF5GGSLRBV4ZA)]
+This fork retains Sherloq's existing license and project history. Optional third-party components retain their own upstream terms. In particular, Noiseprint and TruFor carry GRIP-UNINA nonprofit/informational-use restrictions; review the upstream licenses before enabling or redistributing those components.
