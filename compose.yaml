@@ -13,11 +13,12 @@ services:
       SHERLOQ_SESSION_TTL_HOURS: "${SHERLOQ_SESSION_TTL_HOURS:-12}"
       SHERLOQ_BASIC_AUTH_USER: "${SHERLOQ_BASIC_AUTH_USER:-}"
       SHERLOQ_BASIC_AUTH_PASSWORD: "${SHERLOQ_BASIC_AUTH_PASSWORD:-}"
-      # These internal URLs are always declared. Model-service discovery probes
-      # worker health, so tools stay disabled unless their profile is running.
-      SHERLOQ_NOISEPRINT_URL: http://noiseprint:8101
-      SHERLOQ_MEDIAN_URL: http://median-filter:8103
-      SHERLOQ_TRUFOR_URL: http://trufor:8102
+      SHERLOQ_MODEL_HEALTH_TIMEOUT_SECONDS: "${SHERLOQ_MODEL_HEALTH_TIMEOUT_SECONDS:-0.5}"
+      # Internal defaults work with the profiles below. Set any of these in the
+      # host environment to point the WebUI at a separately hosted worker.
+      SHERLOQ_NOISEPRINT_URL: "${SHERLOQ_NOISEPRINT_URL:-http://noiseprint:8101}"
+      SHERLOQ_MEDIAN_URL: "${SHERLOQ_MEDIAN_URL:-http://median-filter:8103}"
+      SHERLOQ_TRUFOR_URL: "${SHERLOQ_TRUFOR_URL:-http://trufor:8102}"
     restart: unless-stopped
 
   noiseprint:
