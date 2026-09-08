@@ -18,14 +18,54 @@ SERVICE_ENV = {
 }
 
 
+def _health_timeout() -> float:
+    value = float(os.environ.get("SHERLOQ_MODEL_HEALTH_TIMEOUT_SECONDS", "0.5"))
+    return max(0.1, min(value, 5.0))
+
+
+def _probe_service(value: str) -> tuple[bool, str | None]:
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False, "Service URL must use http:// or https://"
+    request = Request(
+        f"{value.rstrip('/')}/health",
+        method="GET",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=_health_timeout()) as response:
+            response.read(1)
+            status = int(getattr(response, "status", 200))
+            if 200 <= status < 400:
+                return True, None
+            return False, f"Health check returned HTTP {status}"
+    except HTTPError as exc:
+        return False, f"Health check returned HTTP {exc.code}"
+    except (URLError, TimeoutError, OSError) as exc:
+        reason = getattr(exc, "reason", exc)
+        return False, str(reason)
+
+
 def service_capabilities() -> dict[str, dict[str, Any]]:
-    return {
-        name: {
-            "configured": bool(os.environ.get(environment, "").strip()),
+    capabilities: dict[str, dict[str, Any]] = {}
+    for name, environment in SERVICE_ENV.items():
+        value = os.environ.get(environment, "").strip()
+        declared = bool(value)
+        available = False
+        error: str | None = None
+        if declared:
+            available, error = _probe_service(value)
+        entry: dict[str, Any] = {
+            # Keep the existing browser contract: configured means usable now.
+            "configured": declared and available,
+            "declared": declared,
+            "available": available,
             "environment": environment,
         }
-        for name, environment in SERVICE_ENV.items()
-    }
+        if error:
+            entry["error"] = error
+        capabilities[name] = entry
+    return capabilities
 
 
 def _base_url(service: str) -> str:
