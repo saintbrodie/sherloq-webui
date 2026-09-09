@@ -63,6 +63,7 @@ html,body{background:var(--bg)}
 .source-panel .panel-head .source-head-right{display:flex;align-items:center;gap:12px}
 .zoom-wrap{display:flex;align-items:center;gap:7px}
 .zoom-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.zoom-value{min-width:38px;color:#c6cdd3;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right}
 .zoom{border-radius:3px;background:#0d1014}
 .zoom button{height:30px;background:#11151a}
 .zoom button:hover{background:#1b2026}
@@ -77,6 +78,8 @@ html,body{background:var(--bg)}
 }
 .image-stage img{margin-top:0}
 .analysis-body{background:#0d1014}
+.analysis-image{display:flex;align-items:flex-start;justify-content:center;min-height:0;height:auto;padding:0}
+.analysis-image img{display:block;max-width:100%;height:auto;margin:0 auto}
 .result{padding:10px}
 .desc,.data,.analysis-image,.gallery article,.hist{border-radius:3px;background:#101318}
 .gallery{gap:8px}
