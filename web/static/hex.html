@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <title>Sherloq Hex Viewer</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/professional.css">
+  <style>
+    body{min-height:100vh;background:#0b0d10}
+    .hex-shell{min-height:100vh;display:flex;flex-direction:column}
+    .hex-top{height:58px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;border-bottom:1px solid var(--line);background:#0d1014;position:sticky;top:0;z-index:5}
+    .hex-brand{display:flex;align-items:center;gap:12px;min-width:0}
+    .hex-brand img{width:112px;height:38px;object-fit:contain;object-position:left center}
+    .hex-title{min-width:0}.hex-title strong{display:block;font-size:12px}.hex-title span{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+    .hex-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .hex-controls label{font-size:10px;color:var(--muted)}
+    .hex-controls input,.hex-controls select{height:30px;border:1px solid var(--line);background:#101419;color:var(--text);border-radius:3px;padding:0 7px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
+    .hex-controls input{width:125px}
+    .hex-main{padding:14px;overflow:auto}
+    .hex-table{width:100%;border-collapse:collapse;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#0f1216;border:1px solid var(--line)}
+    .hex-table th{position:sticky;top:58px;background:#14181d;color:var(--muted);text-align:left;font-size:10px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--line);padding:8px 10px}
+    .hex-table td{padding:4px 10px;border-bottom:1px solid #171c22;white-space:pre}
+    .hex-table tr:last-child td{border-bottom:0}
+    .hex-offset{color:#8093a1;width:130px}.hex-bytes{color:#d8dde1}.hex-ascii{color:#a8b1ba}
+    .hex-status{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:10px;background:#0d1014;position:sticky;bottom:0}
+    @media(max-width:760px){.hex-top{height:auto;padding:8px;align-items:flex-start}.hex-controls{justify-content:flex-end}.hex-title{display:none}.hex-table{font-size:10px}.hex-table th{top:54px}.hex-offset{width:96px}.hex-main{padding:8px}}
+  </style>
+</head>
+<body>
+<div class="hex-shell">
+  <header class="hex-top">
+    <div class="hex-brand">
+      <img src="/sherloq-logo.png" alt="Sherloq">
+      <div class="hex-title"><strong>Local Hex Viewer</strong><span id="hexFileName">Loading evidence…</span></div>
+    </div>
+    <div class="hex-controls">
+      <button id="hexPrev" class="btn ghost">← Prev</button>
+      <label>Offset <input id="hexOffset" value="0x00000000"></label>
+      <label>Page <select id="hexLength"><option>256</option><option>512</option><option selected>1024</option><option>2048</option><option>4096</option></select></label>
+      <button id="hexGo" class="btn ghost">Go</button>
+      <button id="hexNext" class="btn ghost">Next →</button>
+      <a id="hexDownload" class="btn primary" href="#">Download evidence</a>
+    </div>
+  </header>
+  <main class="hex-main">
+    <table class="hex-table">
+      <thead><tr><th>Offset</th><th>Hex bytes</th><th>ASCII</th></tr></thead>
+      <tbody id="hexRows"></tbody>
+    </table>
+  </main>
+  <footer id="hexStatus" class="hex-status">Loading…</footer>
+</div>
+<script src="/hex-viewer.js" defer></script>
+</body>
+</html>

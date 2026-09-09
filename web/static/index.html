@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#080c10">
+  <meta name="theme-color" content="#0b0d10">
   <title>Sherloq WebUI</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/professional.css">
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
     <a class="brand" href="/">
-      <span class="mark">S</span>
-      <span><strong>SHERLOQ</strong><small>Digital Image Forensics</small></span>
+      <img class="brand-logo" src="/sherloq-logo.png" alt="Sherloq">
+      <span class="brand-copy"><strong>SHERLOQ</strong><small>Digital Image Forensics</small></span>
     </a>
     <div class="actions">
       <span id="sessionStatus" class="status"><i></i>No image loaded</span>
@@ -49,12 +50,21 @@
     <section id="workspace" class="workspace hidden">
       <div class="workspace-head">
         <div><span class="eyebrow">ACTIVE EVIDENCE</span><h1 id="fileName">—</h1><p id="fileMeta">—</p></div>
-        <div class="zoom"><button id="zoomOut">−</button><button id="zoomReset">100%</button><button id="zoomIn">+</button></div>
       </div>
 
       <div class="grid">
         <section class="panel source-panel">
-          <header class="panel-head"><div><span>REFERENCE</span><strong>Original image</strong></div><em id="sourceDims">—</em></header>
+          <header class="panel-head">
+            <div><span>REFERENCE</span><strong>Original image</strong></div>
+            <div class="source-head-right">
+              <em id="sourceDims">—</em>
+              <div class="zoom-wrap">
+                <span class="zoom-label">Zoom</span>
+                <div class="zoom"><button id="zoomOut" title="Zoom out">−</button><button id="zoomReset" title="Fit image">Fit</button><button id="zoomIn" title="Zoom in">+</button></div>
+                <span id="zoomValue" class="zoom-value">100%</span>
+              </div>
+            </div>
+          </header>
           <div id="sourceStage" class="image-stage"><img id="sourceImage" alt="Uploaded source" draggable="false"></div>
         </section>
 
@@ -76,5 +86,6 @@
 <script src="/external-tools.js" defer></script>
 <script src="/session-tools.js" defer></script>
 <script src="/history.js" defer></script>
+<script src="/ux-polish.js" defer></script>
 </body>
 </html>

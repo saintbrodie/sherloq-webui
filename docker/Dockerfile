@@ -16,6 +16,7 @@ COPY requirements-web.txt ./
 RUN pip install --no-cache-dir -r requirements-web.txt
 
 COPY web ./web
+COPY logo ./logo
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin sherloq \
     && mkdir -p /tmp/sherloq-webui-sessions \
