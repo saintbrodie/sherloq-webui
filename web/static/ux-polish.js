@@ -1,6 +1,7 @@
 (() => {
   const zoomValue = document.querySelector("#zoomValue");
-  const baseSetZoom = setZoom;
+  const hexTool = tool("hex-editor");
+  if (hexTool) hexTool.label = "Hex Viewer";
 
   function updateZoomReadout() {
     if (zoomValue) zoomValue.textContent = `${Math.round(state.zoom * 100)}%`;
@@ -9,7 +10,11 @@
   }
 
   setZoom = function setZoomPolished(value) {
-    baseSetZoom(value);
+    state.zoom = Math.min(4, Math.max(0.02, Number(value) || 1));
+    if (state.session) {
+      el.source.style.width = `${state.session.width * state.zoom}px`;
+      el.source.style.height = "auto";
+    }
     updateZoomReadout();
     if (typeof drawMagnifierRoi === "function") drawMagnifierRoi();
   };
@@ -23,11 +28,9 @@
       availableWidth / Math.max(1, state.session.width),
       availableHeight / Math.max(1, state.session.height),
     );
-    baseSetZoom(Math.max(0.1, fit));
-    updateZoomReadout();
+    setZoom(fit);
     el.stage.scrollTop = 0;
     el.stage.scrollLeft = 0;
-    if (typeof drawMagnifierRoi === "function") drawMagnifierRoi();
   }
 
   el.zreset.onclick = fitSourceToStage;
@@ -120,6 +123,14 @@
   SherloqPlugins.registerRunner("magnifier", (key, params) => (
     SherloqPlugins.runAdvanced(key, params, "magnifier", { keepMagnifier: true })
   ));
+
+  // Stop the legacy mouse handler from starting a second ROI drag. Pointer
+  // events below own Magnifier selection and work consistently across repeated runs.
+  el.source.addEventListener("mousedown", (event) => {
+    if (state.active !== "magnifier") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
 
   let pointerDrag = null;
   el.source.addEventListener("pointerdown", (event) => {
@@ -251,5 +262,6 @@
       </div>`;
   });
 
+  renderNav(el.search.value);
   updateZoomReadout();
 })();
