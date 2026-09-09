@@ -13,6 +13,7 @@ from .ela_api import router as ela_router
 from .history_api import router as history_router
 from .evidence_api import router as evidence_router
 from .session_api import router as session_router
+from .ux_api import router as ux_router
 from .security import install_security_headers
 
 # `web.app` mounts StaticFiles at `/` as its final route. Any routes appended
@@ -32,6 +33,7 @@ app.include_router(ela_router)
 app.include_router(history_router)
 app.include_router(evidence_router)
 app.include_router(session_router)
+app.include_router(ux_router)
 
 if static_mount is not None:
     app.router.routes.append(static_mount)
