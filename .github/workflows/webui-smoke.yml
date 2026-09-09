@@ -38,6 +38,8 @@ jobs:
           node --check web/static/external-tools.js
           node --check web/static/session-tools.js
           node --check web/static/history.js
+          node --check web/static/ux-polish.js
+          node --check web/static/hex-viewer.js
       - name: Verify consolidated Docker targets drop root
         run: |
           grep -q '^FROM python:3.12-slim AS webui$' docker/Dockerfile
